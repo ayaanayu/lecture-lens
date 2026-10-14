@@ -1,2 +1,2 @@
 # lecture-lens
-IDEATHON 3.0 project
+LectureLens AI 4.0 — Campus Learning Intelligence Platform
