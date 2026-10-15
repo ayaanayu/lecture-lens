@@ -1,0 +1,2238 @@
+import React, { useEffect, useState, useCallback } from 'react';\
+import { Search, Download, Trash2, FileText, Sparkles, BookOpen, Calendar } from 'lucide-react';\
+import { base44 } from '@/api/base44Client';\
+\
+export default function ActivityPage() {\
+&#x20; const [lectures, setLectures] = useState([]);\
+&#x20; const [loading, setLoading] = useState(true);\
+&#x20; const [search, setSearch] = useState('');\
+&#x20; const [subjectFilter, setSubjectFilter] = useState('');\
+&#x20; const [subjects, setSubjects] = useState([]);\
+\
+&#x20; const loadLectures = useCallback(async () => {\
+&#x20;   setLoading(true);\
+&#x20;   try {\
+&#x20;     const query = {};\
+&#x20;     if (search.trim()) {\
+&#x20;       query.title = { $regex: search.trim(), $options: 'i' };\
+&#x20;     }\
+&#x20;     if (subjectFilter) {\
+&#x20;       query.subject = subjectFilter;\
+&#x20;     }\
+&#x20;     const { items } = await base44.entities.Lecture.filter(query, { sort: '-created_date', limit: 200 });\
+&#x20;     setLectures(items);\
+&#x20;   } catch (err) {\
+&#x20;     console.error(err);\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; }, [search, subjectFilter]);\
+\
+&#x20; const loadSubjects = useCallback(async () => {\
+&#x20;   try {\
+&#x20;     const { items } = await base44.entities.Lecture.list({ distinct: 'subject' });\
+&#x20;     setSubjects(items.filter(Boolean));\
+&#x20;   } catch (err) {\
+&#x20;     console.error(err);\
+&#x20;   }\
+&#x20; }, []);\
+\
+&#x20; useEffect(() => {\
+&#x20;   loadSubjects();\
+&#x20; }, [loadSubjects]);\
+\
+&#x20; useEffect(() => {\
+&#x20;   const timer = setTimeout(loadLectures, 300);\
+&#x20;   return () => clearTimeout(timer);\
+&#x20; }, [loadLectures]);\
+\
+&#x20; const handleExport = () => {\
+&#x20;   const headers = ['Title', 'Subject', 'Status', 'Has Summary', 'Has Notes', 'Word Count', 'Created'];\
+&#x20;   const rows = lectures.map((l) => [\
+&#x20;     \`"${l.title || ''}"\`,\
+&#x20;     \`"${l.subject || ''}"\`,\
+&#x20;     l.status || '',\
+&#x20;     l.summary ? 'Yes' : 'No',\
+&#x20;     l.notes ? 'Yes' : 'No',\
+&#x20;     l.content ? l.content.trim().split(/\s+/).length : 0,\
+&#x20;     l.created_date ? new Date(l.created_date).toLocaleDateString() : '',\
+&#x20;   ]);\
+&#x20;   const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');\
+&#x20;   const blob = new Blob([csv], { type: 'text/csv' });\
+&#x20;   const url = URL.createObjectURL(blob);\
+&#x20;   const a = document.createElement('a');\
+&#x20;   a.href = url;\
+&#x20;   a.download = 'lecturelens-activity.csv';\
+&#x20;   a.click();\
+&#x20;   URL.revokeObjectURL(url);\
+&#x20; };\
+\
+&#x20; const handleDelete = async (lectureId) => {\
+&#x20;   if (!confirm('Delete this lecture? This cannot be undone.')) return;\
+&#x20;   try {\
+&#x20;     await base44.entities.Lecture.delete(lectureId);\
+&#x20;     setLectures((prev) => prev.filter((l) => l.id !== lectureId));\
+&#x20;   } catch (err) {\
+&#x20;     console.error(err);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-6xl mx-auto">\
+&#x20;     \<div className="flex items-start justify-between mb-6">\
+&#x20;       \<div>\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900 mb-1">Activity & resources\</h1>\
+&#x20;         \<p className="text-slate-500 text-sm">Track all your lectures, exports, and AI-generated resources.\</p>\
+&#x20;       \</div>\
+&#x20;       \<button\
+&#x20;         onClick={handleExport}\
+&#x20;         disabled={lectures.length === 0}\
+&#x20;         className="inline-flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"\
+&#x20;       \>\
+&#x20;         \<Download className="w-4 h-4" />\
+&#x20;         Export CSV\
+&#x20;       \</button>\
+&#x20;     \</div>\
+\
+&#x20;     \<div className="flex flex-col sm:flex-row gap-3 mb-6">\
+&#x20;       \<div className="relative flex-1">\
+&#x20;         \<Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />\
+&#x20;         \<input\
+&#x20;           type="text"\
+&#x20;           placeholder="Search lectures…"\
+&#x20;           value={search}\
+&#x20;           onChange={(e) => setSearch(e.target.value)}\
+&#x20;           className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"\
+&#x20;         />\
+&#x20;       \</div>\
+&#x20;       \<select\
+&#x20;         value={subjectFilter}\
+&#x20;         onChange={(e) => setSubjectFilter(e.target.value)}\
+&#x20;         className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all min-w-[160px]"\
+&#x20;       \>\
+&#x20;         \<option value="">All subjects\</option>\
+&#x20;         {subjects.map((s) => (\
+&#x20;           \<option key={s} value={s}>{s}\</option>\
+&#x20;         ))}\
+&#x20;       \</select>\
+&#x20;     \</div>\
+\
+&#x20;     {loading ? (\
+&#x20;       \<div className="text-center py-16 text-slate-400 text-sm">Loading…\</div>\
+&#x20;     ) : lectures.length === 0 ? (\
+&#x20;       \<div className="bg-white rounded-2xl border border-dashed border-slate-300 p-16 text-center">\
+&#x20;         \<p className="text-slate-500 text-sm">No lectures found.\</p>\
+&#x20;       \</div>\
+&#x20;     ) : (\
+&#x20;       \<div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">\
+&#x20;         \<div className="overflow-x-auto">\
+&#x20;           \<table className="w-full">\
+&#x20;             \<thead>\
+&#x20;               \<tr className="border-b border-slate-200 bg-slate-50">\
+&#x20;                 \<th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Title\</th>\
+&#x20;                 \<th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Subject\</th>\
+&#x20;                 \<th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">AI\</th>\
+&#x20;                 \<th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3 hidden md:table-cell">Created\</th>\
+&#x20;                 \<th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3">Actions\</th>\
+&#x20;               \</tr>\
+&#x20;             \</thead>\
+&#x20;             \<tbody className="divide-y divide-slate-100">\
+&#x20;               {lectures.map((lecture) => (\
+&#x20;                 \<tr key={lecture.id} className="hover:bg-slate-50 transition-colors">\
+&#x20;                   \<td className="px-5 py-3.5">\
+&#x20;                     \<a href={\`#/lectures/${lecture.id}\`} className="text-sm font-medium text-slate-900 hover:text-indigo-700">\
+&#x20;                       {lecture.title}\
+&#x20;                     \</a>\
+&#x20;                   \</td>\
+&#x20;                   \<td className="px-5 py-3.5">\
+&#x20;                     \<span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">\
+&#x20;                       {lecture.subject || 'General'}\
+&#x20;                     \</span>\
+&#x20;                   \</td>\
+&#x20;                   \<td className="px-5 py-3.5">\
+&#x20;                     \<div className="flex items-center gap-1.5">\
+&#x20;                       {lecture.summary && \<Sparkles className="w-3.5 h-3.5 text-emerald-500" title="Has summary" />}\
+&#x20;                       {lecture.notes && \<BookOpen className="w-3.5 h-3.5 text-amber-500" title="Has notes" />}\
+&#x20;                       {!lecture.summary && !lecture.notes && \<FileText className="w-3.5 h-3.5 text-slate-300" />}\
+&#x20;                     \</div>\
+&#x20;                   \</td>\
+&#x20;                   \<td className="px-5 py-3.5 hidden md:table-cell">\
+&#x20;                     \<span className="text-xs text-slate-500 flex items-center gap-1">\
+&#x20;                       \<Calendar className="w-3 h-3" />\
+&#x20;                       {lecture.created_date ? new Date(lecture.created_date).toLocaleDateString() : '—'}\
+&#x20;                     \</span>\
+&#x20;                   \</td>\
+&#x20;                   \<td className="px-5 py-3.5 text-right">\
+&#x20;                     \<button\
+&#x20;                       onClick={() => handleDelete(lecture.id)}\
+&#x20;                       className="text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-red-50"\
+&#x20;                     \>\
+&#x20;                       \<Trash2 className="w-4 h-4" />\
+&#x20;                     \</button>\
+&#x20;                   \</td>\
+&#x20;                 \</tr>\
+&#x20;               ))}\
+&#x20;             \</tbody>\
+&#x20;           \</table>\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;     )}\
+&#x20;   \</div>\
+&#x20; );\
+}        this is activity code first code import React from 'react';\
+import { MapPin } from 'lucide-react';\
+import AttendanceTracker from '@/components/AttendanceTracker';\
+\
+/\*\*\
+&#x20;\* Smart Attendance page.\
+&#x20;\* Wraps the geolocation check-in card with a recent check-in history panel.\
+&#x20;\*/\
+export default function AttendancePage() {\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-4xl mx-auto">\
+&#x20;     \<div className="mb-8">\
+&#x20;       \<div className="flex items-center gap-2.5 mb-1">\
+&#x20;         \<MapPin className="w-6 h-6 text-indigo-600" />\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900">Smart Attendance\</h1>\
+&#x20;       \</div>\
+&#x20;       \<p className="text-sm text-slate-500">Location-based check-in for classes and study sessions.\</p>\
+&#x20;     \</div>\
+\
+&#x20;     \<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">\
+&#x20;       \<AttendanceTracker />\
+\
+&#x20;       \<div className="bg-white rounded-2xl border border-slate-200 p-6">\
+&#x20;         \<h3 className="text-sm font-semibold text-slate-900 mb-4">Recent Check-ins\</h3>\
+&#x20;         \<div className="text-center text-slate-400 text-sm py-8">\
+&#x20;           No check-ins recorded yet. Use the check-in card to mark your attendance.\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;     \</div>\
+&#x20;   \</div>\
+&#x20; );\
+}    this is attendance        // ConceptMapPage.jsx — Dynamic concept map showing subject prerequisites\
+import React from 'react';\
+import { Network } from 'lucide-react';\
+import ConceptGraph from '@/components/ConceptGraph';\
+\
+export default function ConceptMapPage() {\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-5xl mx-auto">\
+&#x20;     {/\* Header \*/}\
+&#x20;     \<div className="mb-6">\
+&#x20;       \<div className="flex items-center gap-2 mb-1">\
+&#x20;         \<Network className="w-5 h-5 text-indigo-600" />\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900">Concept Map\</h1>\
+&#x20;       \</div>\
+&#x20;       \<p className="text-sm text-slate-500">Visualize how subjects connect and what prerequisites each topic requires.\</p>\
+&#x20;     \</div>\
+&#x20;     \<ConceptGraph />\
+&#x20;   \</div>\
+&#x20; );\
+}   tbis is concept mapimport React, { useState } from "react";\
+import { Link } from "react-router-dom";\
+import { base44 } from "@/api/base44Client";\
+import { Button } from "@/components/ui/button";\
+import { Input } from "@/components/ui/input";\
+import { Label } from "@/components/ui/label";\
+import { Mail, ArrowLeft, Loader2 } from "lucide-react";\
+import AuthLayout from "@/components/AuthLayout";\
+\
+export default function ForgotPassword() {\
+&#x20; const [email, setEmail] = useState("");\
+&#x20; const [loading, setLoading] = useState(false);\
+&#x20; const [sent, setSent] = useState(false);\
+\
+&#x20; const handleSubmit = async (e) => {\
+&#x20;   e.preventDefault();\
+&#x20;   setLoading(true);\
+&#x20;   try {\
+&#x20;     await base44.auth.resetPasswordRequest(email);\
+&#x20;   } catch {\
+&#x20;     // Always show success regardless\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;     setSent(true);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; return (\
+&#x20;   \<AuthLayout\
+&#x20;     icon={Mail}\
+&#x20;     title="Reset password"\
+&#x20;     subtitle="We'll send you a link to reset it"\
+&#x20;     footer={\
+&#x20;       \<Link to="/login" className="text-primary font-medium hover:underline">\
+&#x20;         \<ArrowLeft className="w-3 h-3 inline mr-1" />Back to log in\
+&#x20;       \</Link>\
+&#x20;     }\
+&#x20;   \>\
+&#x20;     {sent ? (\
+&#x20;       \<p className="text-sm text-foreground text-center">\
+&#x20;         If an account exists with that email, you'll receive a password reset link shortly.\
+&#x20;       \</p>\
+&#x20;     ) : (\
+&#x20;       \<form onSubmit={handleSubmit} className="space-y-4">\
+&#x20;         \<div className="space-y-2">\
+&#x20;           \<Label htmlFor="email">Email address\</Label>\
+&#x20;           \<div className="relative">\
+&#x20;             \<Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />\
+&#x20;             \<Input\
+&#x20;               id="email"\
+&#x20;               type="email"\
+&#x20;               autoComplete="email"\
+&#x20;               autoFocus\
+&#x20;               placeholder="you@example.com"\
+&#x20;               value={email}\
+&#x20;               onChange={(e) => setEmail(e.target.value)}\
+&#x20;               className="pl-10 h-12"\
+&#x20;               required\
+&#x20;             />\
+&#x20;           \</div>\
+&#x20;         \</div>\
+&#x20;         \<Button type="submit" className="w-full h-12 font-medium" disabled={loading}>\
+&#x20;           {loading ? (\
+&#x20;             <>\
+&#x20;               \<Loader2 className="w-4 h-4 mr-2 animate-spin" />\
+&#x20;               Sending...\
+&#x20;             \</>\
+&#x20;           ) : (\
+&#x20;             "Send reset link"\
+&#x20;           )}\
+&#x20;         \</Button>\
+&#x20;       \</form>\
+&#x20;     )}\
+&#x20;   \</AuthLayout>\
+&#x20; );\
+}     this is forgot pass rd// HealthPage.jsx — Private student well-being hub with health logging and medical routing\
+import React, { useState, useEffect } from 'react';\
+import { Heart, Shield, Activity } from 'lucide-react';\
+import { base44 } from '@/api/base44Client';\
+import HealthLogger from '@/components/HealthLogger';\
+import MedicalRouting from '@/components/MedicalRouting';\
+import { format } from 'date-fns';\
+\
+// Mood emoji mapping for log display\
+const moodEmojis = { great: '😄', good: '🙂', okay: '😐', low: '😕', poor: '😢' };\
+\
+export default function HealthPage() {\
+&#x20; const [logs, setLogs] = useState([]);\
+&#x20; const [loading, setLoading] = useState(true);\
+&#x20; const [showRouting, setShowRouting] = useState(false);\
+\
+&#x20; useEffect(() => {\
+&#x20;   loadLogs();\
+&#x20; }, []);\
+\
+&#x20; // Load recent health logs\
+&#x20; const loadLogs = async () => {\
+&#x20;   try {\
+&#x20;     const { items } = await base44.entities.HealthLog.filter({}, { sort: '-created_date', limit: 30 });\
+&#x20;     setLogs(items);\
+&#x20;     // Show medical routing if the most recent log needs help\
+&#x20;     if (items.length > 0 && items[0].needs_help) setShowRouting(true);\
+&#x20;   } catch (err) {\
+&#x20;     console.error(err);\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; // Called after a new log is saved\
+&#x20; const handleSaved = () => {\
+&#x20;   loadLogs();\
+&#x20;   setShowRouting(true);\
+&#x20; };\
+\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-4xl mx-auto">\
+&#x20;     {/\* Header \*/}\
+&#x20;     \<div className="mb-6">\
+&#x20;       \<div className="flex items-center gap-2 mb-1">\
+&#x20;         \<Heart className="w-5 h-5 text-rose-500" />\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900">Well-being Hub\</h1>\
+&#x20;       \</div>\
+&#x20;       \<p className="text-sm text-slate-500">A private, confidential space to track your health and get help when you need it.\</p>\
+&#x20;     \</div>\
+\
+&#x20;     {/\* Privacy notice \*/}\
+&#x20;     \<div className="flex items-center gap-2 p-3 bg-rose-50 rounded-xl mb-6">\
+&#x20;       \<Shield className="w-4 h-4 text-rose-600 shrink-0" />\
+&#x20;       \<p className="text-xs text-rose-700">Your health logs are private. Only you can see them. This information is not shared with anyone.\</p>\
+&#x20;     \</div>\
+\
+&#x20;     \<div className="grid grid-cols-1 md:grid-cols-2 gap-6">\
+&#x20;       {/\* Health logger form \*/}\
+&#x20;       \<HealthLogger onSaved={handleSaved} />\
+\
+&#x20;       {/\* Recent logs + medical routing \*/}\
+&#x20;       \<div className="space-y-4">\
+&#x20;         \<div className="bg-white rounded-2xl border border-slate-200 p-5">\
+&#x20;           \<h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">\
+&#x20;             \<Activity className="w-4 h-4 text-indigo-600" />\
+&#x20;             Recent Logs\
+&#x20;           \</h3>\
+&#x20;           {loading ? (\
+&#x20;             \<p className="text-sm text-slate-400 text-center py-4">Loading…\</p>\
+&#x20;           ) : logs.length === 0 ? (\
+&#x20;             \<p className="text-sm text-slate-400 text-center py-4">No logs yet. Start with today's check-in.\</p>\
+&#x20;           ) : (\
+&#x20;             \<div className="space-y-2 max-h-60 overflow-y-auto">\
+&#x20;               {logs.map((log) => (\
+&#x20;                 \<div key={log.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-50">\
+&#x20;                   \<span className="text-xl">{moodEmojis[log.mood]}\</span>\
+&#x20;                   \<div className="flex-1 min-w-0">\
+&#x20;                     \<p className="text-xs font-medium text-slate-700">\
+&#x20;                       {format(new Date(log.created_date), 'MMM d, yyyy')}\
+&#x20;                     \</p>\
+&#x20;                     \<p className="text-xs text-slate-500">Energy: {log.energy_level}/10\</p>\
+&#x20;                   \</div>\
+&#x20;                   {log.issue_type && log.issue_type !== 'none' && (\
+&#x20;                     \<span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">\
+&#x20;                       {log.issue_type}\
+&#x20;                     \</span>\
+&#x20;                   )}\
+&#x20;                 \</div>\
+&#x20;               ))}\
+&#x20;             \</div>\
+&#x20;           )}\
+&#x20;         \</div>\
+\
+&#x20;         {/\* Medical routing (shown when help is needed) \*/}\
+&#x20;         {showRouting && \<MedicalRouting />}\
+&#x20;       \</div>\
+&#x20;     \</div>\
+&#x20;   \</div>\
+&#x20; );\
+}    this is health pageimport React from 'react';\
+import { FlaskConical, Code2 } from 'lucide-react';\
+import VirtualLabs from '@/components/VirtualLabs';\
+import CompilerInterface from '@/components/CompilerInterface';\
+\
+/\*\*\
+&#x20;\* Virtual Labs & Compiler page.\
+&#x20;\* Combines the simulation lab grid with the multi-language compiler interface.\
+&#x20;\*/\
+export default function LabsPage() {\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-6xl mx-auto">\
+&#x20;     \<div className="mb-8">\
+&#x20;       \<div className="flex items-center gap-2.5 mb-1">\
+&#x20;         \<FlaskConical className="w-6 h-6 text-indigo-600" />\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900">Virtual Labs & Compiler\</h1>\
+&#x20;       \</div>\
+&#x20;       \<p className="text-sm text-slate-500">Run interactive simulations and compile code in multiple languages.\</p>\
+&#x20;     \</div>\
+\
+&#x20;     {/\* Virtual Labs simulation grid \*/}\
+&#x20;     \<div className="mb-10">\
+&#x20;       \<h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">\
+&#x20;         \<FlaskConical className="w-5 h-5 text-indigo-500" />\
+&#x20;         Virtual Lab Simulations\
+&#x20;       \</h2>\
+&#x20;       \<VirtualLabs />\
+&#x20;     \</div>\
+\
+&#x20;     {/\* Multi-language compiler interface \*/}\
+&#x20;     \<div>\
+&#x20;       \<h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">\
+&#x20;         \<Code2 className="w-5 h-5 text-indigo-500" />\
+&#x20;         Multi-Language Compiler\
+&#x20;       \</h2>\
+&#x20;       \<CompilerInterface />\
+&#x20;     \</div>\
+&#x20;   \</div>\
+&#x20; );\
+}   this is lab pageimport React, { useEffect, useState, useCallback } from 'react';\
+import { Search, Plus } from 'lucide-react';\
+import { base44 } from '@/api/base44Client';\
+import AddLectureDialog from '@/components/AddLectureDialog';\
+import LectureCard from '@/components/LectureCard';\
+\
+export default function Lectures() {\
+&#x20; const [lectures, setLectures] = useState([]);\
+&#x20; const [loading, setLoading] = useState(true);\
+&#x20; const [search, setSearch] = useState('');\
+&#x20; const [dialogOpen, setDialogOpen] = useState(false);\
+\
+&#x20; const loadLectures = useCallback(async () => {\
+&#x20;   setLoading(true);\
+&#x20;   try {\
+&#x20;     const query = search.trim()\
+&#x20;       ? { title: { $regex: search.trim(), $options: 'i' } }\
+&#x20;       : {};\
+&#x20;     const { items } = await base44.entities.Lecture.filter(query, { sort: '-created_date', limit: 100 });\
+&#x20;     setLectures(items);\
+&#x20;   } catch (err) {\
+&#x20;     console.error(err);\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; }, [search]);\
+\
+&#x20; useEffect(() => {\
+&#x20;   const timer = setTimeout(loadLectures, 300);\
+&#x20;   return () => clearTimeout(timer);\
+&#x20; }, [loadLectures]);\
+\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-6xl mx-auto">\
+&#x20;     \<div className="flex items-start justify-between mb-6">\
+&#x20;       \<div>\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900 mb-1">My lectures\</h1>\
+&#x20;         \<p className="text-slate-500 text-sm">Browse, search, and manage all your lecture recordings.\</p>\
+&#x20;       \</div>\
+&#x20;       \<button\
+&#x20;         onClick={() => setDialogOpen(true)}\
+&#x20;         className="inline-flex items-center justify-center rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm font-medium transition-colors"\
+&#x20;       \>\
+&#x20;         \<Plus className="w-4 h-4 mr-2" />\
+&#x20;         Add lecture\
+&#x20;       \</button>\
+&#x20;     \</div>\
+\
+&#x20;     \<div className="relative mb-6">\
+&#x20;       \<Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />\
+&#x20;       \<input\
+&#x20;         type="text"\
+&#x20;         placeholder="Search by title…"\
+&#x20;         value={search}\
+&#x20;         onChange={(e) => setSearch(e.target.value)}\
+&#x20;         className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"\
+&#x20;       />\
+&#x20;     \</div>\
+\
+&#x20;     {loading ? (\
+&#x20;       \<div className="text-center py-16 text-slate-400 text-sm">Loading lectures…\</div>\
+&#x20;     ) : lectures.length === 0 ? (\
+&#x20;       \<div className="bg-white rounded-2xl border border-dashed border-slate-300 p-16 text-center">\
+&#x20;         \<p className="text-slate-500 text-sm">\
+&#x20;           {search ? 'No lectures match your search.' : 'No lectures yet. Click "Add lecture" to create one.'}\
+&#x20;         \</p>\
+&#x20;       \</div>\
+&#x20;     ) : (\
+&#x20;       \<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">\
+&#x20;         {lectures.map((lecture) => (\
+&#x20;           \<LectureCard key={lecture.id} lecture={lecture} />\
+&#x20;         ))}\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     \<AddLectureDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSaved={loadLectures} />\
+&#x20;   \</div>\
+&#x20; );\
+}    this is lecturesimport React, { useState } from "react";\
+import { Link } from "react-router-dom";\
+import { base44 } from "@/api/base44Client";\
+import { Button } from "@/components/ui/button";\
+import { Input } from "@/components/ui/input";\
+import { Label } from "@/components/ui/label";\
+import { LogIn, Mail, Lock, Loader2 } from "lucide-react";\
+import AuthLayout from "@/components/AuthLayout";\
+import GoogleIcon from "@/components/GoogleIcon";\
+import { safeReturnTo } from "@/lib/authReturnTo";\
+\
+export default function Login() {\
+&#x20; const [email, setEmail] = useState("");\
+&#x20; const [password, setPassword] = useState("");\
+&#x20; const [error, setError] = useState("");\
+&#x20; const [loading, setLoading] = useState(false);\
+&#x20; // Post-login destination (e.g. the MCP OAuth consent page sends users here\
+&#x20; // with returnTo so the grant flow can resume). Same-origin paths only.\
+&#x20; const returnTo = safeReturnTo();\
+\
+&#x20; const handleSubmit = async (e) => {\
+&#x20;   e.preventDefault();\
+&#x20;   setError("");\
+&#x20;   setLoading(true);\
+&#x20;   try {\
+&#x20;     await base44.auth.loginViaEmailPassword(email, password);\
+&#x20;     window\.location.href = returnTo;\
+&#x20;   } catch (err) {\
+&#x20;     setError(err.message || "Invalid email or password");\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; const handleGoogle = () => {\
+&#x20;   base44.auth.loginWithProvider("google", returnTo);\
+&#x20; };\
+\
+&#x20; return (\
+&#x20;   \<AuthLayout\
+&#x20;     icon={LogIn}\
+&#x20;     title="Welcome back"\
+&#x20;     subtitle="Log in to your account"\
+&#x20;     footer={\
+&#x20;       <>\
+&#x20;         Don't have an account?{" "}\
+&#x20;         \<Link\
+&#x20;           to={"/register" + (returnTo !== "/" ? "?returnTo=" + encodeURIComponent(returnTo) : "")}\
+&#x20;           className="text-primary font-medium hover:underline"\
+&#x20;         \>\
+&#x20;           Create one\
+&#x20;         \</Link>\
+&#x20;       \</>\
+&#x20;     }\
+&#x20;   \>\
+&#x20;     \<Button\
+&#x20;       variant="outline"\
+&#x20;       className="w-full h-12 text-sm font-medium mb-6"\
+&#x20;       onClick={handleGoogle}\
+&#x20;     \>\
+&#x20;       \<GoogleIcon className="w-5 h-5 mr-2" />\
+&#x20;       Continue with Google\
+&#x20;     \</Button>\
+\
+&#x20;     \<div className="relative mb-6">\
+&#x20;       \<div className="absolute inset-0 flex items-center">\
+&#x20;         \<div className="w-full border-t border-border" />\
+&#x20;       \</div>\
+&#x20;       \<div className="relative flex justify-center text-xs uppercase">\
+&#x20;         \<span className="bg-card px-3 text-muted-foreground">or\</span>\
+&#x20;       \</div>\
+&#x20;     \</div>\
+\
+&#x20;     {error && (\
+&#x20;       \<div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">\
+&#x20;         {error}\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     \<form onSubmit={handleSubmit} className="space-y-4">\
+&#x20;       \<div className="space-y-2">\
+&#x20;         \<Label htmlFor="email">Email\</Label>\
+&#x20;         \<div className="relative">\
+&#x20;           \<Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />\
+&#x20;           \<Input\
+&#x20;             id="email"\
+&#x20;             type="email"\
+&#x20;             autoComplete="email"\
+&#x20;             autoFocus\
+&#x20;             placeholder="you@example.com"\
+&#x20;             value={email}\
+&#x20;             onChange={(e) => setEmail(e.target.value)}\
+&#x20;             className="pl-10 h-12"\
+&#x20;             required\
+&#x20;           />\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<div className="space-y-2">\
+&#x20;         \<div className="flex items-center justify-between">\
+&#x20;           \<Label htmlFor="password">Password\</Label>\
+&#x20;           \<Link to="/forgot-password" className="text-xs text-primary hover:underline">\
+&#x20;             Forgot password?\
+&#x20;           \</Link>\
+&#x20;         \</div>\
+&#x20;         \<div className="relative">\
+&#x20;           \<Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />\
+&#x20;           \<Input\
+&#x20;             id="password"\
+&#x20;             type="password"\
+&#x20;             autoComplete="current-password"\
+&#x20;             placeholder="••••••••"\
+&#x20;             value={password}\
+&#x20;             onChange={(e) => setPassword(e.target.value)}\
+&#x20;             className="pl-10 h-12"\
+&#x20;             required\
+&#x20;           />\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<Button type="submit" className="w-full h-12 font-medium" disabled={loading}>\
+&#x20;         {loading ? (\
+&#x20;           <>\
+&#x20;             \<Loader2 className="w-4 h-4 mr-2 animate-spin" />\
+&#x20;             Logging in...\
+&#x20;           \</>\
+&#x20;         ) : (\
+&#x20;           "Log in"\
+&#x20;         )}\
+&#x20;       \</Button>\
+&#x20;     \</form>\
+&#x20;   \</AuthLayout>\
+&#x20; );\
+}\
+&#x20;  this iss loginimport React, { useEffect, useState } from 'react';\
+import { Link } from 'react-router-dom';\
+import { BookOpen, Sparkles, FileText, TrendingUp, Plus, ArrowRight } from 'lucide-react';\
+import { base44 } from '@/api/base44Client';\
+import AddLectureDialog from '@/components/AddLectureDialog';\
+\
+export default function Overview() {\
+&#x20; const [lectures, setLectures] = useState([]);\
+&#x20; const [loading, setLoading] = useState(true);\
+&#x20; const [dialogOpen, setDialogOpen] = useState(false);\
+\
+&#x20; useEffect(() => {\
+&#x20;   loadLectures();\
+&#x20; }, []);\
+\
+&#x20; const loadLectures = async () => {\
+&#x20;   try {\
+&#x20;     const { items } = await base44.entities.Lecture.filter({}, { sort: '-created_date', limit: 50 });\
+&#x20;     setLectures(items);\
+&#x20;   } catch (err) {\
+&#x20;     console.error(err);\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; const totalLectures = lectures.length;\
+&#x20; const withSummary = lectures.filter((l) => l.summary).length;\
+&#x20; const withNotes = lectures.filter((l) => l.notes).length;\
+&#x20; const totalWords = lectures.reduce((sum, l) => sum + (l.content ? l.content.trim().split(/\s+/).length : 0), 0);\
+\
+&#x20; const stats = [\
+&#x20;   { label: 'Total lectures', value: totalLectures, icon: BookOpen, color: 'indigo' },\
+&#x20;   { label: 'AI summaries', value: withSummary, icon: Sparkles, color: 'emerald' },\
+&#x20;   { label: 'Study notes', value: withNotes, icon: FileText, color: 'amber' },\
+&#x20;   { label: 'Total words', value: totalWords.toLocaleString(), icon: TrendingUp, color: 'sky' },\
+&#x20; ];\
+\
+&#x20; const colorMap = {\
+&#x20;   indigo: 'bg-indigo-50 text-indigo-600',\
+&#x20;   emerald: 'bg-emerald-50 text-emerald-600',\
+&#x20;   amber: 'bg-amber-50 text-amber-600',\
+&#x20;   sky: 'bg-sky-50 text-sky-600',\
+&#x20; };\
+\
+&#x20; const recent = lectures.slice(0, 4);\
+\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-6xl mx-auto">\
+&#x20;     \<div className="flex items-start justify-between mb-8">\
+&#x20;       \<div>\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900 mb-1">Welcome back 👋\</h1>\
+&#x20;         \<p className="text-slate-500 text-sm">Here's an overview of your learning progress.\</p>\
+&#x20;       \</div>\
+&#x20;       \<Button onClick={() => setDialogOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">\
+&#x20;         \<Plus className="w-4 h-4 mr-2" />\
+&#x20;         Add lecture\
+&#x20;       \</Button>\
+&#x20;     \</div>\
+\
+&#x20;     \<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">\
+&#x20;       {stats.map((stat) => (\
+&#x20;         \<div key={stat.label} className="bg-white rounded-2xl border border-slate-200 p-5">\
+&#x20;           \<div className={\`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${colorMap[stat.color]}\`}>\
+&#x20;             \<stat.icon className="w-5 h-5" />\
+&#x20;           \</div>\
+&#x20;           \<div className="text-2xl font-bold text-slate-900">{stat.value}\</div>\
+&#x20;           \<div className="text-xs text-slate-500 mt-0.5">{stat.label}\</div>\
+&#x20;         \</div>\
+&#x20;       ))}\
+&#x20;     \</div>\
+\
+&#x20;     \<div className="mb-3 flex items-center justify-between">\
+&#x20;       \<h2 className="text-lg font-semibold text-slate-900">Recent lectures\</h2>\
+&#x20;       \<Link to="/lectures" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">\
+&#x20;         View all \<ArrowRight className="w-3.5 h-3.5" />\
+&#x20;       \</Link>\
+&#x20;     \</div>\
+\
+&#x20;     {loading ? (\
+&#x20;       \<div className="text-center py-12 text-slate-400 text-sm">Loading…\</div>\
+&#x20;     ) : recent.length === 0 ? (\
+&#x20;       \<div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">\
+&#x20;         \<BookOpen className="w-10 h-10 text-slate-300 mx-auto mb-3" />\
+&#x20;         \<p className="text-slate-500 text-sm mb-4">No lectures yet. Add your first one to get started.\</p>\
+&#x20;         \<Button onClick={() => setDialogOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">\
+&#x20;           \<Plus className="w-4 h-4 mr-2" />\
+&#x20;           Add lecture\
+&#x20;         \</Button>\
+&#x20;       \</div>\
+&#x20;     ) : (\
+&#x20;       \<div className="space-y-2">\
+&#x20;         {recent.map((lecture) => (\
+&#x20;           \<Link\
+&#x20;             key={lecture.id}\
+&#x20;             to={\`/lectures/${lecture.id}\`}\
+&#x20;             className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-5 py-4 hover:border-indigo-300 hover:shadow-sm transition-all"\
+&#x20;           \>\
+&#x20;             \<div className="min-w-0 flex-1">\
+&#x20;               \<div className="font-medium text-slate-900 text-sm truncate">{lecture.title}\</div>\
+&#x20;               \<div className="text-xs text-slate-400 mt-0.5">{lecture.subject || 'General'}\</div>\
+&#x20;             \</div>\
+&#x20;             \<div className="flex items-center gap-2 ml-4">\
+&#x20;               {lecture.summary && \<Sparkles className="w-4 h-4 text-emerald-400" />}\
+&#x20;               {lecture.notes && \<FileText className="w-4 h-4 text-amber-400" />}\
+&#x20;               \<ArrowRight className="w-4 h-4 text-slate-300" />\
+&#x20;             \</div>\
+&#x20;           \</Link>\
+&#x20;         ))}\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     \<AddLectureDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSaved={loadLectures} />\
+&#x20;   \</div>\
+&#x20; );\
+}\
+\
+function Button({ children, className, ...props }) {\
+&#x20; return (\
+&#x20;   \<button className={\`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${className}\`} {...props}>\
+&#x20;     {children}\
+&#x20;   \</button>\
+&#x20; );\
+}   this is over view// PracticePage.jsx — Adaptive Practice Engine with AI-generated quizzes\
+import React, { useState, useEffect } from 'react';\
+import { Brain, Loader2, ArrowLeft } from 'lucide-react';\
+import { base44 } from '@/api/base44Client';\
+import { getNextPracticeQuestion } from '@/lib/api';\
+import QuizRunner from '@/components/QuizRunner';\
+\
+export default function PracticePage() {\
+&#x20; const [lectures, setLectures] = useState([]);\
+&#x20; const [selectedLecture, setSelectedLecture] = useState(null);\
+&#x20; const [questions, setQuestions] = useState([]);\
+&#x20; const [generating, setGenerating] = useState(false);\
+&#x20; const [loading, setLoading] = useState(true);\
+\
+&#x20; useEffect(() => {\
+&#x20;   loadLectures();\
+&#x20; }, []);\
+\
+&#x20; // Load available lectures for quiz generation\
+&#x20; const loadLectures = async () => {\
+&#x20;   try {\
+&#x20;     const { items } = await base44.entities.Lecture.filter({}, { sort: '-created_date', limit: 50 });\
+&#x20;     setLectures(items);\
+&#x20;   } catch (err) {\
+&#x20;     console.error(err);\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; // Generate an adaptive quiz — tries Axios POST /api/v1/practice/next first,\
+&#x20; // falls back to the built-in AI backend if the server is unavailable.\
+&#x20; const generateQuiz = async (lecture) => {\
+&#x20;   if (!lecture) return;\
+&#x20;   setSelectedLecture(lecture);\
+&#x20;   setGenerating(true);\
+&#x20;   setQuestions([]);\
+&#x20;   try {\
+&#x20;     // Attempt server-side adaptive practice endpoint\
+&#x20;     const result = await getNextPracticeQuestion(lecture.id, 'easy', 0);\
+&#x20;     if (result?.questions?.length > 0) {\
+&#x20;       setQuestions(result.questions);\
+&#x20;       return;\
+&#x20;     }\
+&#x20;     // Fallback: use built-in AI quiz generation\
+&#x20;     const res = await base44.functions.invoke('lecture_ai', {\
+&#x20;       action: 'quiz',\
+&#x20;       content: lecture.content,\
+&#x20;       title: lecture.title,\
+&#x20;     });\
+&#x20;     const aiResult = res.data?.result;\
+&#x20;     setQuestions(aiResult?.questions || []);\
+&#x20;   } catch (err) {\
+&#x20;     // Fallback: use built-in AI quiz generation\
+&#x20;     try {\
+&#x20;       const res = await base44.functions.invoke('lecture_ai', {\
+&#x20;         action: 'quiz',\
+&#x20;         content: lecture.content,\
+&#x20;         title: lecture.title,\
+&#x20;       });\
+&#x20;       const aiResult = res.data?.result;\
+&#x20;       setQuestions(aiResult?.questions || []);\
+&#x20;     } catch (fallbackErr) {\
+&#x20;       console.error(fallbackErr);\
+&#x20;     }\
+&#x20;   } finally {\
+&#x20;     setGenerating(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; // Fetch next adaptive-difficulty question from /api/v1/practice/next\
+&#x20; const fetchNextQuestion = async (currentDifficulty, performance) => {\
+&#x20;   try {\
+&#x20;     const result = await getNextPracticeQuestion(selectedLecture?.id, currentDifficulty, performance);\
+&#x20;     return result;\
+&#x20;   } catch (err) {\
+&#x20;     console.error('Failed to fetch next question:', err);\
+&#x20;     return null;\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-3xl mx-auto">\
+&#x20;     {/\* Page header \*/}\
+&#x20;     \<div className="mb-6">\
+&#x20;       \<div className="flex items-center gap-2 mb-1">\
+&#x20;         \<Brain className="w-5 h-5 text-indigo-600" />\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900">Adaptive Practice\</h1>\
+&#x20;       \</div>\
+&#x20;       \<p className="text-sm text-slate-500">AI-generated quizzes that adapt difficulty as you progress.\</p>\
+&#x20;     \</div>\
+\
+&#x20;     {/\* Lecture selection \*/}\
+&#x20;     {!selectedLecture && (\
+&#x20;       \<div>\
+&#x20;         \<h3 className="text-sm font-semibold text-slate-700 mb-3">Choose a lecture to practice\</h3>\
+&#x20;         {loading ? (\
+&#x20;           \<div className="text-center py-8">\
+&#x20;             \<Loader2 className="w-6 h-6 text-indigo-500 animate-spin mx-auto" />\
+&#x20;           \</div>\
+&#x20;         ) : lectures.length === 0 ? (\
+&#x20;           \<p className="text-sm text-slate-400 text-center py-8">\
+&#x20;             No lectures yet. Add a lecture first to generate quizzes.\
+&#x20;           \</p>\
+&#x20;         ) : (\
+&#x20;           \<div className="space-y-2">\
+&#x20;             {lectures.map((lec) => (\
+&#x20;               \<button\
+&#x20;                 key={lec.id}\
+&#x20;                 onClick={() => generateQuiz(lec)}\
+&#x20;                 className="w-full text-left flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all"\
+&#x20;               \>\
+&#x20;                 \<div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center shrink-0">\
+&#x20;                   \<Brain className="w-5 h-5 text-indigo-600" />\
+&#x20;                 \</div>\
+&#x20;                 \<div className="min-w-0">\
+&#x20;                   \<p className="text-sm font-medium text-slate-800 truncate">{lec.title}\</p>\
+&#x20;                   \<p className="text-xs text-slate-500">{lec.subject || 'General'}\</p>\
+&#x20;                 \</div>\
+&#x20;               \</button>\
+&#x20;             ))}\
+&#x20;           \</div>\
+&#x20;         )}\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     {/\* Quiz runner \*/}\
+&#x20;     {selectedLecture && (\
+&#x20;       \<div>\
+&#x20;         \<button\
+&#x20;           onClick={() => { setSelectedLecture(null); setQuestions([]); }}\
+&#x20;           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 transition-colors"\
+&#x20;         \>\
+&#x20;           \<ArrowLeft className="w-4 h-4" />\
+&#x20;           Choose another lecture\
+&#x20;         \</button>\
+&#x20;         \<QuizRunner\
+&#x20;           questions={questions}\
+&#x20;           generating={generating}\
+&#x20;           onGenerate={() => generateQuiz(selectedLecture)}\
+&#x20;         />\
+&#x20;       \</div>\
+&#x20;     )}\
+&#x20;   \</div>\
+&#x20; );\
+}   this is practise pagemport React, { useEffect, useState, useCallback } from 'react';\
+import { Radar, Loader2, ChevronDown, CheckCircle2, AlertCircle, Lightbulb } from 'lucide-react';\
+import { base44 } from '@/api/base44Client';\
+\
+export default function RadarPage() {\
+&#x20; const [lectures, setLectures] = useState([]);\
+&#x20; const [loading, setLoading] = useState(true);\
+&#x20; const [selectedId, setSelectedId] = useState('');\
+&#x20; const [scanning, setScanning] = useState(false);\
+&#x20; const [concepts, setConcepts] = useState(null);\
+&#x20; const [error, setError] = useState('');\
+\
+&#x20; const loadLectures = useCallback(async () => {\
+&#x20;   try {\
+&#x20;     const { items } = await base44.entities.Lecture.filter({}, { sort: '-created_date', limit: 100 });\
+&#x20;     setLectures(items);\
+&#x20;   } catch (err) {\
+&#x20;     console.error(err);\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; }, []);\
+\
+&#x20; useEffect(() => {\
+&#x20;   loadLectures();\
+&#x20; }, [loadLectures]);\
+\
+&#x20; const selectedLecture = lectures.find((l) => l.id === selectedId);\
+\
+&#x20; const handleScan = async () => {\
+&#x20;   if (!selectedLecture) return;\
+&#x20;   setScanning(true);\
+&#x20;   setError('');\
+&#x20;   setConcepts(null);\
+&#x20;   try {\
+&#x20;     const res = await base44.functions.invoke('lecture_ai', {\
+&#x20;       action: 'confusion_scan',\
+&#x20;       lectureId: selectedLecture.id,\
+&#x20;       content: selectedLecture.content,\
+&#x20;       title: selectedLecture.title,\
+&#x20;     });\
+&#x20;     const result = res.data?.result;\
+&#x20;     if (result?.concepts) {\
+&#x20;       setConcepts(result.concepts);\
+&#x20;     } else if (typeof result === 'string') {\
+&#x20;       try {\
+&#x20;         const parsed = JSON.parse(result);\
+&#x20;         setConcepts(parsed.concepts || []);\
+&#x20;       } catch {\
+&#x20;         setError('Could not parse scan results.');\
+&#x20;       }\
+&#x20;     } else {\
+&#x20;       setError('No concepts returned.');\
+&#x20;     }\
+&#x20;   } catch (err) {\
+&#x20;     setError(err.message || 'Scan failed.');\
+&#x20;   } finally {\
+&#x20;     setScanning(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-4xl mx-auto">\
+&#x20;     \<div className="mb-6">\
+&#x20;       \<div className="flex items-center gap-2 mb-1">\
+&#x20;         \<Radar className="w-6 h-6 text-indigo-600" />\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900">Confusion Radar\</h1>\
+&#x20;       \</div>\
+&#x20;       \<p className="text-slate-500 text-sm">\
+&#x20;         AI scans a lecture transcript for concepts students typically find confusing, with explanations and practice questions.\
+&#x20;       \</p>\
+&#x20;     \</div>\
+\
+&#x20;     \<div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">\
+&#x20;       \<label className="text-sm font-medium text-slate-700 mb-2 block">Select a lecture to scan\</label>\
+&#x20;       \<div className="flex gap-3">\
+&#x20;         \<div className="relative flex-1">\
+&#x20;           \<select\
+&#x20;             value={selectedId}\
+&#x20;             onChange={(e) => { setSelectedId(e.target.value); setConcepts(null); setError(''); }}\
+&#x20;             className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm text-slate-900 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"\
+&#x20;           \>\
+&#x20;             \<option value="">Choose a lecture…\</option>\
+&#x20;             {lectures.map((l) => (\
+&#x20;               \<option key={l.id} value={l.id}>{l.title}\</option>\
+&#x20;             ))}\
+&#x20;           \</select>\
+&#x20;           \<ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />\
+&#x20;         \</div>\
+&#x20;         \<button\
+&#x20;           onClick={handleScan}\
+&#x20;           disabled={!selectedId || scanning}\
+&#x20;           className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors whitespace-nowrap"\
+&#x20;         \>\
+&#x20;           {scanning ? \<Loader2 className="w-4 h-4 animate-spin" /> : \<Radar className="w-4 h-4" />}\
+&#x20;           {scanning ? 'Scanning…' : 'Scan for confusion'}\
+&#x20;         \</button>\
+&#x20;       \</div>\
+&#x20;       {selectedLecture && !selectedLecture.content && (\
+&#x20;         \<p className="text-xs text-amber-600 mt-2">This lecture has no transcript content to scan.\</p>\
+&#x20;       )}\
+&#x20;     \</div>\
+\
+&#x20;     {error && (\
+&#x20;       \<div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 mb-4 flex items-center gap-2">\
+&#x20;         \<AlertCircle className="w-4 h-4 shrink-0" />\
+&#x20;         {error}\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     {scanning && (\
+&#x20;       \<div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">\
+&#x20;         \<Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />\
+&#x20;         \<p className="text-sm text-slate-500">Analyzing transcript for confusing concepts…\</p>\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     {concepts && concepts.length > 0 && (\
+&#x20;       \<div className="space-y-4">\
+&#x20;         \<div className="flex items-center gap-2 text-sm font-medium text-slate-700">\
+&#x20;           \<CheckCircle2 className="w-4 h-4 text-emerald-500" />\
+&#x20;           Found {concepts.length} potentially confusing concept{concepts.length !== 1 ? 's' : ''}\
+&#x20;         \</div>\
+&#x20;         {concepts.map((concept, i) => (\
+&#x20;           \<ConceptCard key={i} concept={concept} index={i} />\
+&#x20;         ))}\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     {concepts && concepts.length === 0 && !error && (\
+&#x20;       \<div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">\
+&#x20;         No confusing concepts detected.\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     {!loading && lectures.length === 0 && (\
+&#x20;       \<div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">\
+&#x20;         \<p className="text-slate-500 text-sm">Add a lecture first to use the Confusion Radar.\</p>\
+&#x20;       \</div>\
+&#x20;     )}\
+&#x20;   \</div>\
+&#x20; );\
+}\
+\
+function ConceptCard({ concept, index }) {\
+&#x20; const [showAnswer, setShowAnswer] = useState(false);\
+&#x20; return (\
+&#x20;   \<div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">\
+&#x20;     \<div className="p-5">\
+&#x20;       \<div className="flex items-start gap-3 mb-3">\
+&#x20;         \<div className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">\
+&#x20;           {index + 1}\
+&#x20;         \</div>\
+&#x20;         \<div className="flex-1">\
+&#x20;           \<h3 className="font-semibold text-slate-900 text-base">{concept.concept}\</h3>\
+&#x20;           \<p className="text-sm text-slate-500 mt-1">{concept.why_confusing}\</p>\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<div className="bg-indigo-50 rounded-xl p-4 flex gap-2.5">\
+&#x20;         \<Lightbulb className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />\
+&#x20;         \<p className="text-sm text-slate-700 leading-relaxed">{concept.explanation}\</p>\
+&#x20;       \</div>\
+&#x20;       {concept.practice_question && (\
+&#x20;         \<div className="mt-4 border-t border-slate-100 pt-4">\
+&#x20;           \<p className="text-sm font-medium text-slate-900 mb-3">{concept.practice_question}\</p>\
+&#x20;           \<div className="space-y-2">\
+&#x20;             {concept.options?.map((opt, i) => {\
+&#x20;               const isCorrect = String.fromCharCode(65 + i) === concept.correct_answer;\
+&#x20;               return (\
+&#x20;                 \<button\
+&#x20;                   key={i}\
+&#x20;                   onClick={() => setShowAnswer(true)}\
+&#x20;                   className={\`w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-sm border transition-all ${\
+&#x20;                     showAnswer && isCorrect\
+&#x20;                       ? 'bg-emerald-50 border-emerald-300 text-emerald-800'\
+&#x20;                       : showAnswer\
+&#x20;                       ? 'bg-slate-50 border-slate-200 text-slate-600'\
+&#x20;                       : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-indigo-300'\
+&#x20;                   }\`}\
+&#x20;                 \>\
+&#x20;                   \<span className="font-semibold text-xs w-5">{String.fromCharCode(65 + i)}.\</span>\
+&#x20;                   {opt}\
+&#x20;                   {showAnswer && isCorrect && \<CheckCircle2 className="w-4 h-4 text-emerald-500 ml-auto" />}\
+&#x20;                 \</button>\
+&#x20;               );\
+&#x20;             })}\
+&#x20;           \</div>\
+&#x20;           {showAnswer && (\
+&#x20;             \<p className="text-xs text-emerald-600 mt-2 font-medium">\
+&#x20;               Correct answer: {concept.correct_answer}\
+&#x20;             \</p>\
+&#x20;           )}\
+&#x20;           {!showAnswer && (\
+&#x20;             \<p className="text-xs text-slate-400 mt-2">Click an option to reveal the answer.\</p>\
+&#x20;           )}\
+&#x20;         \</div>\
+&#x20;       )}\
+&#x20;     \</div>\
+&#x20;   \</div>\
+&#x20; );\
+}     this is radar pagetimport React, { useState } from "react";\
+import { Link } from "react-router-dom";\
+import { base44 } from "@/api/base44Client";\
+import { Button } from "@/components/ui/button";\
+import { Input } from "@/components/ui/input";\
+import { Label } from "@/components/ui/label";\
+import { UserPlus, Mail, Lock, Loader2 } from "lucide-react";\
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";\
+import AuthLayout from "@/components/AuthLayout";\
+import GoogleIcon from "@/components/GoogleIcon";\
+import { toast } from "@/components/ui/use-toast";\
+import { safeReturnTo } from "@/lib/authReturnTo";\
+\
+export default function Register() {\
+&#x20; const [email, setEmail] = useState("");\
+&#x20; const [password, setPassword] = useState("");\
+&#x20; const [confirmPassword, setConfirmPassword] = useState("");\
+&#x20; const [error, setError] = useState("");\
+&#x20; const [loading, setLoading] = useState(false);\
+&#x20; const [showOtp, setShowOtp] = useState(false);\
+&#x20; const [otpCode, setOtpCode] = useState("");\
+\
+&#x20; const handleSubmit = async (e) => {\
+&#x20;   e.preventDefault();\
+&#x20;   setError("");\
+&#x20;   if (password !== confirmPassword) {\
+&#x20;     setError("Passwords do not match");\
+&#x20;     return;\
+&#x20;   }\
+&#x20;   setLoading(true);\
+&#x20;   try {\
+&#x20;     await base44.auth.register({ email, password });\
+&#x20;     setShowOtp(true);\
+&#x20;   } catch (err) {\
+&#x20;     setError(err.message || "Registration failed");\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; const handleVerify = async () => {\
+&#x20;   setError("");\
+&#x20;   setLoading(true);\
+&#x20;   try {\
+&#x20;     const result = await base44.auth.verifyOtp({ email, otpCode });\
+&#x20;     if (result?.access_token) {\
+&#x20;       base44.auth.setToken(result.access_token);\
+&#x20;     }\
+&#x20;     window\.location.href = safeReturnTo();\
+&#x20;   } catch (err) {\
+&#x20;     setError(err.message || "Invalid verification code");\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; const handleResend = async () => {\
+&#x20;   setError("");\
+&#x20;   try {\
+&#x20;     await base44.auth.resendOtp(email);\
+&#x20;     toast({\
+&#x20;       title: "Code sent",\
+&#x20;       description: "Check your email for the new code.",\
+&#x20;     });\
+&#x20;   } catch (err) {\
+&#x20;     setError(err.message || "Failed to resend code");\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; const handleGoogle = () => {\
+&#x20;   base44.auth.loginWithProvider("google", safeReturnTo());\
+&#x20; };\
+\
+&#x20; if (showOtp) {\
+&#x20;   return (\
+&#x20;     \<AuthLayout\
+&#x20;       icon={Mail}\
+&#x20;       title="Verify your email"\
+&#x20;       subtitle={\`We sent a code to ${email}\`}\
+&#x20;     \>\
+&#x20;       {error && (\
+&#x20;         \<div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">\
+&#x20;           {error}\
+&#x20;         \</div>\
+&#x20;       )}\
+&#x20;       \<div className="flex justify-center mb-6">\
+&#x20;         \<InputOTP\
+&#x20;           maxLength={6}\
+&#x20;           value={otpCode}\
+&#x20;           onChange={setOtpCode}\
+&#x20;           autoFocus\
+&#x20;           autoComplete="one-time-code"\
+&#x20;         \>\
+&#x20;           \<InputOTPGroup>\
+&#x20;             \<InputOTPSlot index={0} />\
+&#x20;             \<InputOTPSlot index={1} />\
+&#x20;             \<InputOTPSlot index={2} />\
+&#x20;             \<InputOTPSlot index={3} />\
+&#x20;             \<InputOTPSlot index={4} />\
+&#x20;             \<InputOTPSlot index={5} />\
+&#x20;           \</InputOTPGroup>\
+&#x20;         \</InputOTP>\
+&#x20;       \</div>\
+&#x20;       \<Button\
+&#x20;         className="w-full h-12 font-medium"\
+&#x20;         onClick={handleVerify}\
+&#x20;         disabled={loading || otpCode.length < 6}\
+&#x20;       \>\
+&#x20;         {loading ? (\
+&#x20;           <>\
+&#x20;             \<Loader2 className="w-4 h-4 mr-2 animate-spin" />\
+&#x20;             Verifying...\
+&#x20;           \</>\
+&#x20;         ) : (\
+&#x20;           "Verify"\
+&#x20;         )}\
+&#x20;       \</Button>\
+&#x20;       \<p className="text-center text-sm text-muted-foreground mt-4">\
+&#x20;         Didn't receive the code?{" "}\
+&#x20;         \<button onClick={handleResend} className="text-primary font-medium hover:underline">\
+&#x20;           Resend\
+&#x20;         \</button>\
+&#x20;       \</p>\
+&#x20;     \</AuthLayout>\
+&#x20;   );\
+&#x20; }\
+\
+&#x20; return (\
+&#x20;   \<AuthLayout\
+&#x20;     icon={UserPlus}\
+&#x20;     title="Create your account"\
+&#x20;     subtitle="Sign up to get started"\
+&#x20;     footer={\
+&#x20;       <>\
+&#x20;         Already have an account?{" "}\
+&#x20;         \<Link\
+&#x20;           to={"/login" + (safeReturnTo() !== "/" ? "?returnTo=" + encodeURIComponent(safeReturnTo()) : "")}\
+&#x20;           className="text-primary font-medium hover:underline"\
+&#x20;         \>\
+&#x20;           Log in\
+&#x20;         \</Link>\
+&#x20;       \</>\
+&#x20;     }\
+&#x20;   \>\
+&#x20;     \<Button\
+&#x20;       variant="outline"\
+&#x20;       className="w-full h-12 text-sm font-medium mb-6"\
+&#x20;       onClick={handleGoogle}\
+&#x20;     \>\
+&#x20;       \<GoogleIcon className="w-5 h-5 mr-2" />\
+&#x20;       Continue with Google\
+&#x20;     \</Button>\
+\
+&#x20;     \<div className="relative mb-6">\
+&#x20;       \<div className="absolute inset-0 flex items-center">\
+&#x20;         \<div className="w-full border-t border-border" />\
+&#x20;       \</div>\
+&#x20;       \<div className="relative flex justify-center text-xs uppercase">\
+&#x20;         \<span className="bg-card px-3 text-muted-foreground">or\</span>\
+&#x20;       \</div>\
+&#x20;     \</div>\
+\
+&#x20;     {error && (\
+&#x20;       \<div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">\
+&#x20;         {error}\
+&#x20;       \</div>\
+&#x20;     )}\
+\
+&#x20;     \<form onSubmit={handleSubmit} className="space-y-4">\
+&#x20;       \<div className="space-y-2">\
+&#x20;         \<Label htmlFor="email">Email\</Label>\
+&#x20;         \<div className="relative">\
+&#x20;           \<Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />\
+&#x20;           \<Input\
+&#x20;             id="email"\
+&#x20;             type="email"\
+&#x20;             autoComplete="email"\
+&#x20;             autoFocus\
+&#x20;             placeholder="you@example.com"\
+&#x20;             value={email}\
+&#x20;             onChange={(e) => setEmail(e.target.value)}\
+&#x20;             className="pl-10 h-12"\
+&#x20;             required\
+&#x20;           />\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<div className="space-y-2">\
+&#x20;         \<Label htmlFor="password">Password\</Label>\
+&#x20;         \<div className="relative">\
+&#x20;           \<Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />\
+&#x20;           \<Input\
+&#x20;             id="password"\
+&#x20;             type="password"\
+&#x20;             autoComplete="new-password"\
+&#x20;             placeholder="••••••••"\
+&#x20;             value={password}\
+&#x20;             onChange={(e) => setPassword(e.target.value)}\
+&#x20;             className="pl-10 h-12"\
+&#x20;             required\
+&#x20;           />\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<div className="space-y-2">\
+&#x20;         \<Label htmlFor="confirm">Confirm Password\</Label>\
+&#x20;         \<div className="relative">\
+&#x20;           \<Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />\
+&#x20;           \<Input\
+&#x20;             id="confirm"\
+&#x20;             type="password"\
+&#x20;             autoComplete="new-password"\
+&#x20;             placeholder="••••••••"\
+&#x20;             value={confirmPassword}\
+&#x20;             onChange={(e) => setConfirmPassword(e.target.value)}\
+&#x20;             className="pl-10 h-12"\
+&#x20;             required\
+&#x20;           />\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<Button type="submit" className="w-full h-12 font-medium" disabled={loading}>\
+&#x20;         {loading ? (\
+&#x20;           <>\
+&#x20;             \<Loader2 className="w-4 h-4 mr-2 animate-spin" />\
+&#x20;             Creating account...\
+&#x20;           \</>\
+&#x20;         ) : (\
+&#x20;           "Create account"\
+&#x20;         )}\
+&#x20;       \</Button>\
+&#x20;     \</form>\
+&#x20;   \</AuthLayout>\
+&#x20; );\
+}\
+&#x20; this is register pagemport React, { useState } from "react";\
+import { Link, useSearchParams } from "react-router-dom";\
+import { base44 } from "@/api/base44Client";\
+import { Button } from "@/components/ui/button";\
+import { Input } from "@/components/ui/input";\
+import { Label } from "@/components/ui/label";\
+import { Lock, Loader2, AlertTriangle } from "lucide-react";\
+import AuthLayout from "@/components/AuthLayout";\
+\
+export default function ResetPassword() {\
+&#x20; const [searchParams] = useSearchParams();\
+&#x20; const resetToken = searchParams.get("token");\
+\
+&#x20; const [newPassword, setNewPassword] = useState("");\
+&#x20; const [confirmPassword, setConfirmPassword] = useState("");\
+&#x20; const [error, setError] = useState("");\
+&#x20; const [loading, setLoading] = useState(false);\
+\
+&#x20; const handleSubmit = async (e) => {\
+&#x20;   e.preventDefault();\
+&#x20;   setError("");\
+&#x20;   if (newPassword !== confirmPassword) {\
+&#x20;     setError("Passwords do not match");\
+&#x20;     return;\
+&#x20;   }\
+&#x20;   setLoading(true);\
+&#x20;   try {\
+&#x20;     await base44.auth.resetPassword({ resetToken, newPassword });\
+&#x20;     window\.location.href = "/login";\
+&#x20;   } catch (err) {\
+&#x20;     setError(err.message || "Failed to reset password");\
+&#x20;   } finally {\
+&#x20;     setLoading(false);\
+&#x20;   }\
+&#x20; };\
+\
+&#x20; if (!resetToken) {\
+&#x20;   return (\
+&#x20;     \<AuthLayout\
+&#x20;       icon={AlertTriangle}\
+&#x20;       title="Invalid reset link"\
+&#x20;       subtitle="This password reset link is missing or invalid"\
+&#x20;       footer={\
+&#x20;         \<Link to="/forgot-password" className="text-primary font-medium hover:underline">\
+&#x20;           Request a new link\
+&#x20;         \</Link>\
+&#x20;       }\
+&#x20;     \>\
+&#x20;       \<p className="text-sm text-foreground text-center">\
+&#x20;         The link you used appears to be incomplete. Please request a new password reset email.\
+&#x20;       \</p>\
+&#x20;     \</AuthLayout>\
+&#x20;   );\
+&#x20; }\
+\
+&#x20; return (\
+&#x20;   \<AuthLayout\
+&#x20;     icon={Lock}\
+&#x20;     title="New password"\
+&#x20;     subtitle="Enter your new password below"\
+&#x20;   \>\
+&#x20;     {error && (\
+&#x20;       \<div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">\
+&#x20;         {error}\
+&#x20;       \</div>\
+&#x20;     )}\
+&#x20;     \<form onSubmit={handleSubmit} className="space-y-4">\
+&#x20;       \<div className="space-y-2">\
+&#x20;         \<Label htmlFor="password">New Password\</Label>\
+&#x20;         \<div className="relative">\
+&#x20;           \<Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />\
+&#x20;           \<Input\
+&#x20;             id="password"\
+&#x20;             type="password"\
+&#x20;             autoComplete="new-password"\
+&#x20;             autoFocus\
+&#x20;             placeholder="••••••••"\
+&#x20;             value={newPassword}\
+&#x20;             onChange={(e) => setNewPassword(e.target.value)}\
+&#x20;             className="pl-10 h-12"\
+&#x20;             required\
+&#x20;           />\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<div className="space-y-2">\
+&#x20;         \<Label htmlFor="confirm">Confirm Password\</Label>\
+&#x20;         \<div className="relative">\
+&#x20;           \<Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />\
+&#x20;           \<Input\
+&#x20;             id="confirm"\
+&#x20;             type="password"\
+&#x20;             autoComplete="new-password"\
+&#x20;             placeholder="••••••••"\
+&#x20;             value={confirmPassword}\
+&#x20;             onChange={(e) => setConfirmPassword(e.target.value)}\
+&#x20;             className="pl-10 h-12"\
+&#x20;             required\
+&#x20;           />\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<Button type="submit" className="w-full h-12 font-medium" disabled={loading}>\
+&#x20;         {loading ? (\
+&#x20;           <>\
+&#x20;             \<Loader2 className="w-4 h-4 mr-2 animate-spin" />\
+&#x20;             Resetting...\
+&#x20;           \</>\
+&#x20;         ) : (\
+&#x20;           "Reset password"\
+&#x20;         )}\
+&#x20;       \</Button>\
+&#x20;     \</form>\
+&#x20;   \</AuthLayout>\
+&#x20; );\
+}\
+&#x20; this  is reset passs// StudyRoomsPage.jsx — Virtual study rooms with Pomodoro, whiteboard, and chat\
+import React from 'react';\
+import { Users, Wifi } from 'lucide-react';\
+import PomodoroTimer from '@/components/PomodoroTimer';\
+import Whiteboard from '@/components/Whiteboard';\
+import StudyChat from '@/components/StudyChat';\
+\
+export default function StudyRoomsPage() {\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-6xl mx-auto">\
+&#x20;     {/\* Header \*/}\
+&#x20;     \<div className="mb-6">\
+&#x20;       \<div className="flex items-center gap-2 mb-1">\
+&#x20;         \<Users className="w-5 h-5 text-indigo-600" />\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900">Virtual Study Room\</h1>\
+&#x20;       \</div>\
+&#x20;       \<p className="text-sm text-slate-500">Collaborate with a shared whiteboard, focus timer, and group chat.\</p>\
+&#x20;     \</div>\
+\
+&#x20;     {/\* Room layout: whiteboard on left, timer + chat on right \*/}\
+&#x20;     \<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">\
+&#x20;       \<div className="lg:col-span-2 space-y-3">\
+&#x20;         \<Whiteboard />\
+&#x20;         \<div className="flex items-center gap-2 text-xs text-slate-400">\
+&#x20;           \<Wifi className="w-3.5 h-3.5" />\
+&#x20;           Shared canvas — draw together in real time (demo mode)\
+&#x20;         \</div>\
+&#x20;       \</div>\
+&#x20;       \<div className="space-y-6">\
+&#x20;         \<PomodoroTimer />\
+&#x20;         \<StudyChat />\
+&#x20;       \</div>\
+&#x20;     \</div>\
+&#x20;   \</div>\
+&#x20; );\
+}import React from 'react';\
+import { ClipboardList } from 'lucide-react';\
+import SyllabusAccordion from '@/components/SyllabusAccordion';\
+import RubricGrid from '@/components/RubricGrid';\
+\
+/\*\*\
+&#x20;\* Syllabus & Rubrics Portal page.\
+&#x20;\* Combines the accordion course structure with the interactive rubric grid.\
+&#x20;\*/\
+export default function SyllabusPage() {\
+&#x20; return (\
+&#x20;   \<div className="p-8 max-w-5xl mx-auto">\
+&#x20;     \<div className="mb-8">\
+&#x20;       \<div className="flex items-center gap-2.5 mb-1">\
+&#x20;         \<ClipboardList className="w-6 h-6 text-indigo-600" />\
+&#x20;         \<h1 className="text-2xl font-bold text-slate-900">Syllabus & Rubrics\</h1>\
+&#x20;       \</div>\
+&#x20;       \<p className="text-sm text-slate-500">Course structure, module breakdown, and grading criteria.\</p>\
+&#x20;     \</div>\
+\
+&#x20;     \<div className="mb-8">\
+&#x20;       \<h2 className="text-lg font-semibold text-slate-900 mb-4">Course Structure\</h2>\
+&#x20;       \<SyllabusAccordion />\
+&#x20;     \</div>\
+\
+&#x20;     \<div>\
+&#x20;       \<h2 className="text-lg font-semibold text-slate-900 mb-4">Grading Rubrics\</h2>\
+&#x20;       \<RubricGrid />\
+&#x20;     \</div>\
+&#x20;   \</div>\
+&#x20; );\
+}this is indexxport function createPageUrl(pageName: string) {\
+&#x20;   return '/' + pageName.replace(/ /g, '-');\
+}export function createPageUrl(pageName: string) {\
+&#x20; return '/' + pageName.replace(/ /g, '-');\
+}import { Toaster } from "@/components/ui/toaster"\
+import { QueryClientProvider } from '@tanstack/react-query'\
+import { queryClientInstance } from '@/lib/query-client'\
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';\
+import PageNotFound from './lib/PageNotFound';\
+import { AuthProvider, useAuth } from '@/lib/AuthContext';\
+import UserNotRegisteredError from '@/components/UserNotRegisteredError';\
+import ScrollToTop from './components/ScrollToTop';\
+import ProtectedRoute from '@/components/ProtectedRoute';\
+import Login from '@/pages/Login';\
+import Register from '@/pages/Register';\
+import ForgotPassword from '@/pages/ForgotPassword';\
+import ResetPassword from '@/pages/ResetPassword';\
+import AppLayout from '@/components/AppLayout';\
+import Overview from '@/pages/Overview';\
+import Lectures from '@/pages/Lectures';\
+import LectureDetail from '@/pages/LectureDetail';\
+import RadarPage from '@/pages/RadarPage';\
+import ActivityPage from '@/pages/ActivityPage';\
+import PracticePage from '@/pages/PracticePage';\
+import PlannerPage from '@/pages/PlannerPage';\
+import StudyRoomsPage from '@/pages/StudyRoomsPage';\
+import HealthPage from '@/pages/HealthPage';\
+import ConceptMapPage from '@/pages/ConceptMapPage';\
+import LabsPage from '@/pages/LabsPage';\
+import SyllabusPage from '@/pages/SyllabusPage';\
+import AttendancePage from '@/pages/AttendancePage';\
+\
+const AuthenticatedApp = () => {\
+&#x20; const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();\
+\
+&#x20; // Show loading spinner while checking app public settings or auth\
+&#x20; if (isLoadingPublicSettings || isLoadingAuth) {\
+&#x20;   return (\
+&#x20;     \<div className="fixed inset-0 flex items-center justify-center">\
+&#x20;       \<div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin">\</div>\
+&#x20;     \</div>\
+&#x20;   );\
+&#x20; }\
+\
+&#x20; // Handle authentication errors\
+&#x20; if (authError) {\
+&#x20;   if (authError.type === 'user_not_registered') {\
+&#x20;     return \<UserNotRegisteredError />;\
+&#x20;   } else if (authError.type === 'auth_required') {\
+&#x20;     // Redirect to login automatically\
+&#x20;     navigateToLogin();\
+&#x20;     return null;\
+&#x20;   }\
+&#x20; }\
+\
+&#x20; // Render the main app\
+&#x20; return (\
+&#x20;   \<Routes>\
+&#x20;     \<Route path="/login" element={\<Login />} />\
+&#x20;     \<Route path="/register" element={\<Register />} />\
+&#x20;     \<Route path="/forgot-password" element={\<ForgotPassword />} />\
+&#x20;     \<Route path="/reset-password" element={\<ResetPassword />} />\
+&#x20;     \<Route element={\<ProtectedRoute unauthenticatedElement={\<Navigate to="/login" replace />} />}>\
+&#x20;       \<Route element={\<AppLayout />}>\
+&#x20;         \<Route path="/" element={\<Overview />} />\
+&#x20;         \<Route path="/lectures" element={\<Lectures />} />\
+&#x20;         \<Route path="/lectures/:id" element={\<LectureDetail />} />\
+&#x20;         \<Route path="/radar" element={\<RadarPage />} />\
+&#x20;         \<Route path="/practice" element={\<PracticePage />} />\
+&#x20;         \<Route path="/planner" element={\<PlannerPage />} />\
+&#x20;         \<Route path="/rooms" element={\<StudyRoomsPage />} />\
+&#x20;         \<Route path="/concept-map" element={\<ConceptMapPage />} />\
+&#x20;         \<Route path="/labs" element={\<LabsPage />} />\
+&#x20;         \<Route path="/syllabus" element={\<SyllabusPage />} />\
+&#x20;         \<Route path="/attendance" element={\<AttendancePage />} />\
+&#x20;         \<Route path="/health" element={\<HealthPage />} />\
+&#x20;         \<Route path="/activity" element={\<ActivityPage />} />\
+&#x20;       \</Route>\
+&#x20;     \</Route>\
+&#x20;     \<Route path="\*" element={\<PageNotFound />} />\
+&#x20;   \</Routes>\
+&#x20; );\
+};\
+\
+\
+function App() {\
+\
+&#x20; return (\
+&#x20;   \<AuthProvider>\
+&#x20;     \<QueryClientProvider client={queryClientInstance}>\
+&#x20;       \<Router>\
+&#x20;         \<ScrollToTop />\
+&#x20;         \<AuthenticatedApp />\
+&#x20;       \</Router>\
+&#x20;       \<Toaster />\
+&#x20;     \</QueryClientProvider>\
+&#x20;   \</AuthProvider>\
+&#x20; )\
+}\
+\
+export default App@tailwind base;\
+@tailwind components;\
+@tailwind utilities;\
+\
+@layer base {\
+&#x20; :root {\
+&#x20;   \--background: 0 0% 100%;\
+&#x20;   \--foreground: 0 0% 3.9%;\
+&#x20;   \--card: 0 0% 100%;\
+&#x20;   \--card-foreground: 0 0% 3.9%;\
+&#x20;   \--popover: 0 0% 100%;\
+&#x20;   \--popover-foreground: 0 0% 3.9%;\
+&#x20;   \--primary: 0 0% 9%;\
+&#x20;   \--primary-foreground: 0 0% 98%;\
+&#x20;   \--secondary: 0 0% 96.1%;\
+&#x20;   \--secondary-foreground: 0 0% 9%;\
+&#x20;   \--muted: 0 0% 96.1%;\
+&#x20;   \--muted-foreground: 0 0% 45.1%;\
+&#x20;   \--accent: 0 0% 96.1%;\
+&#x20;   \--accent-foreground: 0 0% 9%;\
+&#x20;   \--destructive: 0 84.2% 60.2%;\
+&#x20;   \--destructive-foreground: 0 0% 98%;\
+&#x20;   \--border: 0 0% 89.8%;\
+&#x20;   \--input: 0 0% 89.8%;\
+&#x20;   \--ring: 0 0% 3.9%;\
+&#x20;   \--chart-1: 12 76% 61%;\
+&#x20;   \--chart-2: 173 58% 39%;\
+&#x20;   \--chart-3: 197 37% 24%;\
+&#x20;   \--chart-4: 43 74% 66%;\
+&#x20;   \--chart-5: 27 87% 67%;\
+&#x20;   \--radius: 0.5rem;\
+&#x20;   \--font-heading: ui-sans-serif, system-ui, sans-serif;\
+&#x20;   \--font-body: ui-sans-serif, system-ui, sans-serif;\
+&#x20;   \--font-display: ui-sans-serif, system-ui, sans-serif;\
+&#x20;   \--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;\
+&#x20;   \--sidebar-background: 0 0% 98%;\
+&#x20;   \--sidebar-foreground: 240 5.3% 26.1%;\
+&#x20;   \--sidebar-primary: 240 5.9% 10%;\
+&#x20;   \--sidebar-primary-foreground: 0 0% 98%;\
+&#x20;   \--sidebar-accent: 240 4.8% 95.9%;\
+&#x20;   \--sidebar-accent-foreground: 240 5.9% 10%;\
+&#x20;   \--sidebar-border: 220 13% 91%;\
+&#x20;   \--sidebar-ring: 217.2 91.2% 59.8%;\
+&#x20; }\
+\
+&#x20; .dark {\
+&#x20;   \--background: 0 0% 3.9%;\
+&#x20;   \--foreground: 0 0% 98%;\
+&#x20;   \--card: 0 0% 3.9%;\
+&#x20;   \--card-foreground: 0 0% 98%;\
+&#x20;   \--popover: 0 0% 3.9%;\
+&#x20;   \--popover-foreground: 0 0% 98%;\
+&#x20;   \--primary: 0 0% 98%;\
+&#x20;   \--primary-foreground: 0 0% 9%;\
+&#x20;   \--secondary: 0 0% 14.9%;\
+&#x20;   \--secondary-foreground: 0 0% 98%;\
+&#x20;   \--muted: 0 0% 14.9%;\
+&#x20;   \--muted-foreground: 0 0% 63.9%;\
+&#x20;   \--accent: 0 0% 14.9%;\
+&#x20;   \--accent-foreground: 0 0% 98%;\
+&#x20;   \--destructive: 0 62.8% 30.6%;\
+&#x20;   \--destructive-foreground: 0 0% 98%;\
+&#x20;   \--border: 0 0% 14.9%;\
+&#x20;   \--input: 0 0% 14.9%;\
+&#x20;   \--ring: 0 0% 83.1%;\
+&#x20;   \--chart-1: 220 70% 50%;\
+&#x20;   \--chart-2: 160 60% 45%;\
+&#x20;   \--chart-3: 30 80% 55%;\
+&#x20;   \--chart-4: 280 65% 60%;\
+&#x20;   \--chart-5: 340 75% 55%;\
+&#x20;   \--sidebar-background: 240 5.9% 10%;\
+&#x20;   \--sidebar-foreground: 240 4.8% 95.9%;\
+&#x20;   \--sidebar-primary: 224.3 76.3% 48%;\
+&#x20;   \--sidebar-primary-foreground: 0 0% 100%;\
+&#x20;   \--sidebar-accent: 240 3.7% 15.9%;\
+&#x20;   \--sidebar-accent-foreground: 240 4.8% 95.9%;\
+&#x20;   \--sidebar-border: 240 3.7% 15.9%;\
+&#x20;   \--sidebar-ring: 217.2 91.2% 59.8%;\
+&#x20; }\
+}\
+\
+\
+\
+@layer base {\
+&#x20; \* {\
+&#x20;   @apply border-border outline-ring/50;\
+&#x20; }\
+\
+&#x20; body {\
+&#x20;   @apply bg-background text-foreground font-body;\
+&#x20; }\
+}\
+\
+@layer components {\
+&#x20; .prose {\
+&#x20;   h1 { font-size: 1.5rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #0f172a; }\
+&#x20;   h2 { font-size: 1.25rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.5rem; color: #0f172a; }\
+&#x20;   h3 { font-size: 1.1rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem; color: #1e293b; }\
+&#x20;   p { margin-bottom: 0.75rem; line-height: 1.7; color: #334155; }\
+&#x20;   ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }\
+&#x20;   ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }\
+&#x20;   li { margin-bottom: 0.25rem; line-height: 1.6; color: #334155; }\
+&#x20;   strong { font-weight: 600; color: #0f172a; }\
+&#x20;   em { font-style: italic; }\
+&#x20;   code { background: #f1f5f9; padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; font-family: ui-monospace, monospace; }\
+&#x20;   pre { background: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 0.75rem; }\
+&#x20;   pre code { background: none; padding: 0; }\
+&#x20;   blockquote { border-left: 3px solid #c7d2fe; padding-left: 1rem; margin: 0.75rem 0; color: #475569; font-style: italic; }\
+&#x20;   a { color: #4f46e5; text-decoration: underline; }\
+&#x20;   hr { border: none; border-top: 1px solid #e2e8f0; margin: 1rem 0; }\
+&#x20;   table { width: 100%; border-collapse: collapse; margin-bottom: 0.75rem; }\
+&#x20;   th, td { border: 1px solid #e2e8f0; padding: 0.5rem; text-align: left; }\
+&#x20;   th { background: #f8fafc; font-weight: 600; }\
+&#x20; }\
+}\
+\
+/\* Flashcard 3D flip animation \*/\
+.flashcard-3d { perspective: 1200px; }\
+.flashcard-3d-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; }\
+.flashcard-3d-inner.flipped { transform: rotateY(180deg); }\
+.flashcard-3d-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; }\
+.flashcard-3d-back { transform: rotateY(180deg); }import React from 'react'\
+import ReactDOM from 'react-dom/client'\
+import App from '@/App.jsx'\
+import '@/index.css'\
+\
+ReactDOM.createRoot(document.getElementById('root')).render(\
+&#x20; \<App />\
+)\
+thsi is main  #env\
+.env\
+.env.\*\
+\
+\# Logs\
+/logs\
+\*.log\
+npm-debug.log\*\
+yarn-debug.log\*\
+yarn-error.log\*\
+pnpm-debug.log\*\
+lerna-debug.log\*\
+\
+node_modules\
+dist\
+dist-ssr\
+\*.local\
+\
+\# Nitro build output, once this app has a server. Both are regenerated by\
+\# every build, and the deploy runs one before reading them.\
+.output\
+.wrangler\
+\
+\# Editor directories and files\
+.vscode/\*\
+!.vscode/extensions.json\
+.idea\
+.DS_Store\
+\*.suo\
+\*.ntvs\*\
+\*.njsproj\
+\*.sln\
+\*.sw?\
+\
+.env\
+.vite\
+\
+\# Local link to a Base44 app, written by \`base44 link\`\
+base44/.app.jsonc\
+\# AGENTS.md\
+\
+\## Project Context\
+\
+This is a Base44 app repository. Treat it as user-owned application code, keep changes focused on the user's request, and preserve existing project conventions.\
+\
+Start with \`README.md\` for local setup, environment variables, and publish workflow.\
+\
+\## Base44 References\
+\
+\- CLI overview: https\://docs.base44.com/developers/references/cli/get-started/overview\.md\
+\- Agent skills: https\://docs.base44.com/developers/backend/overview/skills.md\
+\
+If your agent supports Agent Skills, install or update Base44 skills before Base44-specific work:\
+\
+\`\`\`bash\
+npx skills add base44/skills\
+\`\`\`\
+\
+\## Key Files\
+\
+\- \`src/\`: frontend application source.\
+\- \`src/api/base44Client.js\`: frontend Base44 SDK client.\
+\- \`vite.config.js\`: Vite config and Base44 Vite plugin setup.\
+\- \`.env.local\`: local-only environment values; never commit secrets.\
+\
+\## Working Notes\
+\
+\- Use \`base44 dev\` as the default local development command when you need the local Base44 backend. It can run the backend and frontend together.\
+\- When docs or code mention the frontend being started automatically, that usually means the Base44 project config includes \`site.serveCommand\`, for example \`"serveCommand": "npm run dev"\` in \`base44/config.jsonc\`.\
+\- Use \`npm run dev\` only for frontend-only work against the hosted Base44 backend.\
+\- Prefer the existing Base44 CLI workflow over adding new npm scripts for Base44-specific tasks.\
+\- Reuse the existing SDK client and Vite plugin patterns before adding new Base44 integration paths.\
+\- Run the relevant checks from \`package.json\` before finishing code changes.  \
+\# See AGENTS.mdclaude\
+\
+Follow the instructions in \`AGENTS.md\`.{\
+&#x20; "$schema": "https\://ui.shadcn.com/schema.json",\
+&#x20; "style": "new-york",\
+&#x20; "rsc": false,\
+&#x20; "tsx": false,\
+&#x20; "tailwind": {\
+&#x20;   "config": "tailwind.config.js",\
+&#x20;   "css": "src/index.css",\
+&#x20;   "baseColor": "neutral",\
+&#x20;   "cssVariables": true,\
+&#x20;   "prefix": ""\
+&#x20; },\
+&#x20; "aliases": {\
+&#x20;   "components": "@/components",\
+&#x20;   "utils": "@/lib/utils",\
+&#x20;   "ui": "@/components/ui",\
+&#x20;   "lib": "@/lib",\
+&#x20;   "hooks": "@/hooks"\
+&#x20; },\
+&#x20; "iconLibrary": "lucide"\
+}mport globals from "globals";\
+import pluginJs from "@eslint/js";\
+import pluginReact from "eslint-plugin-react";\
+import pluginReactHooks from "eslint-plugin-react-hooks";\
+import pluginUnusedImports from "eslint-plugin-unused-imports";\
+\
+export default [\
+&#x20; {\
+&#x20;   files: [\
+&#x20;     "src/components/\*\*/\*.{js,mjs,cjs,jsx}",\
+&#x20;     "src/pages/\*\*/\*.{js,mjs,cjs,jsx}",\
+&#x20;     "src/Layout.jsx",\
+&#x20;   ],\
+&#x20;   ignores: ["src/lib/\*\*/\*", "src/components/ui/\*\*/\*"],\
+&#x20;   ...pluginJs.configs.recommended,\
+&#x20;   ...pluginReact.configs.flat.recommended,\
+&#x20;   languageOptions: {\
+&#x20;     globals: globals.browser,\
+&#x20;     parserOptions: {\
+&#x20;       ecmaVersion: 2022,\
+&#x20;       sourceType: "module",\
+&#x20;       ecmaFeatures: {\
+&#x20;         jsx: true,\
+&#x20;       },\
+&#x20;     },\
+&#x20;   },\
+&#x20;   settings: {\
+&#x20;     react: {\
+&#x20;       version: "detect",\
+&#x20;     },\
+&#x20;   },\
+&#x20;   plugins: {\
+&#x20;     react: pluginReact,\
+&#x20;     "react-hooks": pluginReactHooks,\
+&#x20;     "unused-imports": pluginUnusedImports,\
+&#x20;   },\
+&#x20;   rules: {\
+&#x20;     "no-unused-vars": "off",\
+&#x20;     "react/jsx-uses-vars": "error",\
+&#x20;     "react/jsx-uses-react": "error",\
+&#x20;     "unused-imports/no-unused-imports": "error",\
+&#x20;     "unused-imports/no-unused-vars": [\
+&#x20;       "warn",\
+&#x20;       {\
+&#x20;         vars: "all",\
+&#x20;         varsIgnorePattern: "^\_",\
+&#x20;         args: "after-used",\
+&#x20;         argsIgnorePattern: "^\_",\
+&#x20;       },\
+&#x20;     ],\
+&#x20;     "react/prop-types": "off",\
+&#x20;     "react/react-in-jsx-scope": "off",\
+&#x20;     "react/no-unknown-property": [\
+&#x20;       "error",\
+&#x20;       { ignore: ["cmdk-input-wrapper", "toast-close"] },\
+&#x20;     ],\
+&#x20;     "react-hooks/rules-of-hooks": "error",\
+&#x20;   },\
+&#x20; },\
+];\
+\<!doctype html>\
+\<html lang="en">\
+&#x20; \<head>\
+&#x20;   \<meta charset="UTF-8" />\
+&#x20;   \<link rel="icon" type="image/svg+xml" href="https\://base44.com/logo_v2.svg" />\
+&#x20;   \<meta name="viewport" content="width=device-width, initial-scale=1.0" />\
+&#x20;   \<link rel="manifest" href="/manifest.json" />\
+&#x20;   \<title>Base44 APP\</title>\
+&#x20; \</head>\
+&#x20; \<body>\
+&#x20;   \<div id="root">\</div>\
+&#x20;   \<script type="module" src="/src/main.jsx">\</script>\
+&#x20; \</body>\
+\</html>\
+{\
+&#x20; "compilerOptions": {\
+&#x20;   "baseUrl": ".",\
+&#x20;   "paths": {\
+&#x20;     "@/\*": ["./src/\*"]\
+&#x20;   },\
+&#x20;   "jsx": "react-jsx",\
+&#x20;   "module": "esnext",\
+&#x20;   "moduleResolution": "bundler",\
+&#x20;   "lib": ["esnext", "dom"],\
+&#x20;   "target": "esnext",\
+&#x20;   "checkJs": true,\
+&#x20;   "skipLibCheck": true,\
+&#x20;   "allowSyntheticDefaultImports": true,\
+&#x20;   "esModuleInterop": true,\
+&#x20;   "resolveJsonModule": true,\
+&#x20;   "types": []\
+&#x20; },\
+&#x20; "include": ["src/components/\*\*/\*.js", "src/pages/\*\*/\*.jsx", "src/Layout.jsx"],\
+&#x20; "exclude": ["node_modules", "dist", "src/vite-plugins", "src/components/ui", "src/api", "src/lib"]\
+} "name": "base44-app",\
+&#x20; "private": true,\
+&#x20; "version": "0.0.0",\
+&#x20; "type": "module",\
+&#x20; "scripts": {\
+&#x20;   "dev": "vite",\
+&#x20;   "build": "vite build",\
+&#x20;   "lint": "eslint . --quiet",\
+&#x20;   "lint:fix": "eslint . --fix",\
+&#x20;   "typecheck": "tsc -p ./jsconfig.json",\
+&#x20;   "preview": "vite preview"\
+&#x20; },\
+&#x20; "dependencies": {\
+&#x20;   "@base44/sdk": "^0.8.54",\
+&#x20;   "@base44/vite-plugin": "^1.0.46",\
+&#x20;   "@hello-pangea/dnd": "^17.0.0",\
+&#x20;   "@hookform/resolvers": "^4.1.2",\
+&#x20;   "@radix-ui/react-accordion": "^1.2.3",\
+&#x20;   "@radix-ui/react-alert-dialog": "^1.1.6",\
+&#x20;   "@radix-ui/react-aspect-ratio": "^1.1.2",\
+&#x20;   "@radix-ui/react-avatar": "^1.1.3",\
+&#x20;   "@radix-ui/react-checkbox": "^1.1.4",\
+&#x20;   "@radix-ui/react-collapsible": "^1.1.3",\
+&#x20;   "@radix-ui/react-context-menu": "^2.2.6",\
+&#x20;   "@radix-ui/react-dialog": "^1.1.6",\
+&#x20;   "@radix-ui/react-dropdown-menu": "^2.1.6",\
+&#x20;   "@radix-ui/react-hover-card": "^1.1.6",\
+&#x20;   "@radix-ui/react-label": "^2.1.2",\
+&#x20;   "@radix-ui/react-menubar": "^1.1.6",\
+&#x20;   "@radix-ui/react-navigation-menu": "^1.2.5",\
+&#x20;   "@radix-ui/react-popover": "^1.1.6",\
+&#x20;   "@radix-ui/react-progress": "^1.1.2",\
+&#x20;   "@radix-ui/react-radio-group": "^1.2.3",\
+&#x20;   "@radix-ui/react-scroll-area": "^1.2.3",\
+&#x20;   "@radix-ui/react-select": "^2.1.6",\
+&#x20;   "@radix-ui/react-separator": "^1.1.2",\
+&#x20;   "@radix-ui/react-slider": "^1.2.3",\
+&#x20;   "@radix-ui/react-slot": "^1.1.2",\
+&#x20;   "@radix-ui/react-switch": "^1.1.3",\
+&#x20;   "@radix-ui/react-tabs": "^1.1.3",\
+&#x20;   "@radix-ui/react-toast": "^1.2.2",\
+&#x20;   "@radix-ui/react-toggle": "^1.1.2",\
+&#x20;   "@radix-ui/react-toggle-group": "^1.1.2",\
+&#x20;   "@radix-ui/react-tooltip": "^1.1.8",\
+&#x20;   "@stripe/react-stripe-js": "^3.0.0",\
+&#x20;   "@stripe/stripe-js": "^5.2.0",\
+&#x20;   "@tanstack/react-query": "^5.84.1",\
+&#x20;   "axios": "^1.20.0",\
+&#x20;   "canvas-confetti": "^1.9.4",\
+&#x20;   "class-variance-authority": "^0.7.1",\
+&#x20;   "clsx": "^2.1.1",\
+&#x20;   "cmdk": "^1.0.0",\
+&#x20;   "date-fns": "^3.6.0",\
+&#x20;   "embla-carousel-react": "^8.5.2",\
+&#x20;   "framer-motion": "^11.16.4",\
+&#x20;   "html2canvas": "^1.4.1",\
+&#x20;   "input-otp": "^1.4.2",\
+&#x20;   "jspdf": "^4.2.1",\
+&#x20;   "lodash": "^4.17.21",\
+&#x20;   "lucide-react": "^0.475.0",\
+&#x20;   "moment": "^2.30.1",\
+&#x20;   "next-themes": "^0.4.4",\
+&#x20;   "react": "^18.2.0",\
+&#x20;   "react-day-picker": "^8.10.1",\
+&#x20;   "react-dom": "^18.2.0",\
+&#x20;   "react-hook-form": "^7.54.2",\
+&#x20;   "react-hot-toast": "^2.6.0",\
+&#x20;   "react-leaflet": "^4.2.1",\
+&#x20;   "react-markdown": "^9.0.1",\
+&#x20;   "react-quill-new": "^3.8.3",\
+&#x20;   "react-resizable-panels": "^2.1.7",\
+&#x20;   "react-router-dom": "^6.26.0",\
+&#x20;   "recharts": "^2.15.4",\
+&#x20;   "sonner": "^2.0.1",\
+&#x20;   "tailwind-merge": "^3.0.2",\
+&#x20;   "tailwindcss-animate": "^1.0.7",\
+&#x20;   "three": "^0.171.0",\
+&#x20;   "vaul": "^1.1.2",\
+&#x20;   "zod": "^3.24.2"\
+&#x20; },\
+&#x20; "devDependencies": {\
+&#x20;   "@eslint/js": "^9.19.0",\
+&#x20;   "@types/node": "^22.13.5",\
+&#x20;   "@types/react": "^18.2.66",\
+&#x20;   "@types/react-dom": "^18.2.22",\
+&#x20;   "@vitejs/plugin-react": "^6.0.5",\
+&#x20;   "autoprefixer": "^10.4.20",\
+&#x20;   "baseline-browser-mapping": "^2.8.32",\
+&#x20;   "eslint": "^9.19.0",\
+&#x20;   "eslint-plugin-react": "^7.37.4",\
+&#x20;   "eslint-plugin-react-hooks": "^5.0.0",\
+&#x20;   "eslint-plugin-react-refresh": "^0.4.18",\
+&#x20;   "eslint-plugin-unused-imports": "^4.3.0",\
+&#x20;   "globals": "^15.14.0",\
+&#x20;   "nitro": "^3.0.260610-beta",\
+&#x20;   "postcss": "^8.5.3",\
+&#x20;   "tailwindcss": "^3.4.17",\
+&#x20;   "typescript": "^5.8.2",\
+&#x20;   "vite": "^8.2.0"\
+&#x20; }\
+}export default {\
+&#x20; plugins: {\
+&#x20;   tailwindcss: {},\
+&#x20;   autoprefixer: {},\
+&#x20; },\
+}\
+\
+\# Base44 Project
+
+Use this repository to run and edit the app locally, then publish changes back through Base44.
+
+Any change pushed to the repo will also be reflected in the Base44 Builder.
+
+\## Prerequisites
+
+1\. Clone the repository using the project's Git URL.
+2\. Navigate to the project directory.
+3\. Install dependencies: \`npm install\`.
+4\. Install the Base44 CLI: \`npm install -g base44@latest\`.
+5\. Install [Deno]\([https://docs.deno.com/runtime/getting_started/installation/](https://docs.deno.com/runtime/getting_started/installation/)) — the local Base44 backend runs on it.
+
+Run \`base44 --help\` (or see the [CLI reference]\([https://docs.base44.com/developers/references/cli/commands/introduction](https://docs.base44.com/developers/references/cli/commands/introduction))) for the full command surface.
+
+\## Run Locally
+
+Three commands, from the project root:
+
+\`\`\`bash
+base44 login   # one-time per machine
+base44 link    # one-time per clone
+base44 dev     # local backend + frontend together
+\`\`\`
+
+Open the frontend URL that \`base44 dev\` prints (typically \`[http://localhost:5173](http://localhost:5173)\`).
+
+Notes:
+
+\- **\*\*Every fresh clone needs \`base44 link\`.\*\*** It writes \`base44/.app.jsonc\` (the app-id pointer), which is deliberately gitignored. Your app id is in the Builder URL (\`app.base44.com/apps/\<id>/...\`); \`base44 link --help\` shows the non-interactive flags.
+\- **\*\*\`base44 dev\` runs the frontend for you\*\*** (via \`site.serveCommand\` in this repo's \`base44/config.jsonc\`) — never run \`npm run dev\` yourself: alone it serves a UI with no backend behind it (\`[base44] Proxy not enabled\`, every \`/api\` call fails), and alongside \`base44 dev\` the second Vite silently takes the next port and you end up looking at the wrong one.
+\- **\*\*The app must be published at least once for the UI to load under \`base44 dev\`.\*\*** The frontend boots by fetching app settings from the hosted app; before the first publish that fails and every page redirects to login. The local API works regardless.
+\- Entities, functions, and auth run locally — entity data is **\*\*in-memory only\*\***, wiped when \`base44 dev\` restarts. Everything else (Core integrations, OAuth login) is forwarded to your deployed app. Full breakdown: [Local development overview]\([https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview](https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview)).
+
+\## Frontend Only, Hosted Backend
+
+To work on just the frontend against your app's live hosted backend:
+
+\`\`\`bash
+base44 dev --remote
+\`\`\`
+
+⚠️ In this mode writes go to your app's **\*\*production data\*\*** — plain \`base44 dev\` keeps everything local.
+
+\## Publish Your Changes
+
+After pushing your changes to git, open the Base44 dashboard and publish the app:
+
+\`\`\`bash
+base44 dashboard open
+\`\`\`
+
+This repo syncs to Base44 through git, so publish from the dashboard rather than \`base44 deploy\` — a CLI deploy ships your local tree directly, bypassing the sync, and the deployed state silently diverges from the repo.
+
+\## Docs & Support
+
+GitHub integration: [[https://docs.base44.com/developers/app-code/local-development/github\](https://docs.base44.com/developers/app-code/local-development/github)](https://docs.base44.com/developers/app-code/local-development/github]\(https://docs.base44.com/developers/app-code/local-development/github\))
+
+Local development: [[https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview\](https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview)](https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview]\(https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview\))
+
+Support: [[https://app.base44.com/support\](https://app.base44.com/support)](https://app.base44.com/support]\(https://app.base44.com/support\))
+/\*\* @type {import('tailwindcss').Config} \*/\
+module.exports = {\
+&#x20;   darkMode: ["class"],\
+&#x20;   content: ["./index.html", "./src/\*\*/\*.{ts,tsx,js,jsx}"],\
+&#x20; theme: {\
+&#x20; 	extend: {\
+&#x20; 		opacity: Object.fromEntries(Array.from({ length: 101 }, (\_, i) => [i, \`${i / 100}\`])),\
+&#x20; 		borderRadius: {\
+&#x20; 			lg: 'var(--radius)',\
+&#x20; 			md: 'calc(var(--radius) - 2px)',\
+&#x20; 			sm: 'calc(var(--radius) - 4px)'\
+&#x20; 		},\
+&#x20; 		colors: {\
+&#x20; 			background: 'hsl(var(--background))',\
+&#x20; 			foreground: 'hsl(var(--foreground))',\
+&#x20; 			card: {\
+&#x20; 				DEFAULT: 'hsl(var(--card))',\
+&#x20; 				foreground: 'hsl(var(--card-foreground))'\
+&#x20; 			},\
+&#x20; 			popover: {\
+&#x20; 				DEFAULT: 'hsl(var(--popover))',\
+&#x20; 				foreground: 'hsl(var(--popover-foreground))'\
+&#x20; 			},\
+&#x20; 			primary: {\
+&#x20; 				DEFAULT: 'hsl(var(--primary))',\
+&#x20; 				foreground: 'hsl(var(--primary-foreground))'\
+&#x20; 			},\
+&#x20; 			secondary: {\
+&#x20; 				DEFAULT: 'hsl(var(--secondary))',\
+&#x20; 				foreground: 'hsl(var(--secondary-foreground))'\
+&#x20; 			},\
+&#x20; 			muted: {\
+&#x20; 				DEFAULT: 'hsl(var(--muted))',\
+&#x20; 				foreground: 'hsl(var(--muted-foreground))'\
+&#x20; 			},\
+&#x20; 			accent: {\
+&#x20; 				DEFAULT: 'hsl(var(--accent))',\
+&#x20; 				foreground: 'hsl(var(--accent-foreground))'\
+&#x20; 			},\
+&#x20; 			destructive: {\
+&#x20; 				DEFAULT: 'hsl(var(--destructive))',\
+&#x20; 				foreground: 'hsl(var(--destructive-foreground))'\
+&#x20; 			},\
+&#x20; 			border: 'hsl(var(--border))',\
+&#x20; 			input: 'hsl(var(--input))',\
+&#x20; 			ring: 'hsl(var(--ring))',\
+&#x20; 			chart: {\
+&#x20; 				'1': 'hsl(var(--chart-1))',\
+&#x20; 				'2': 'hsl(var(--chart-2))',\
+&#x20; 				'3': 'hsl(var(--chart-3))',\
+&#x20; 				'4': 'hsl(var(--chart-4))',\
+&#x20; 				'5': 'hsl(var(--chart-5))'\
+&#x20; 			},\
+&#x20; 			sidebar: {\
+&#x20; 				DEFAULT: 'hsl(var(--sidebar-background))',\
+&#x20; 				foreground: 'hsl(var(--sidebar-foreground))',\
+&#x20; 				primary: 'hsl(var(--sidebar-primary))',\
+&#x20; 				'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',\
+&#x20; 				accent: 'hsl(var(--sidebar-accent))',\
+&#x20; 				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',\
+&#x20; 				border: 'hsl(var(--sidebar-border))',\
+&#x20; 				ring: 'hsl(var(--sidebar-ring))'\
+&#x20; 			}\
+&#x20; 		},\
+&#x20; 		fontFamily: {\
+&#x20; 			heading: ['var(--font-heading)'],\
+&#x20; 			body: ['var(--font-body)'],\
+&#x20; 			display: ['var(--font-display)'],\
+&#x20; 			mono: ['var(--font-mono)']\
+&#x20; 		},\
+&#x20; 		keyframes: {\
+&#x20; 			'accordion-down': {\
+&#x20; 				from: {\
+&#x20; 					height: '0'\
+&#x20; 				},\
+&#x20; 				to: {\
+&#x20; 					height: 'var(--radix-accordion-content-height)'\
+&#x20; 				}\
+&#x20; 			},\
+&#x20; 			'accordion-up': {\
+&#x20; 				from: {\
+&#x20; 					height: 'var(--radix-accordion-content-height)'\
+&#x20; 				},\
+&#x20; 				to: {\
+&#x20; 					height: '0'\
+&#x20; 				}\
+&#x20; 			}\
+&#x20; 		},\
+&#x20; 		animation: {\
+&#x20; 			'accordion-down': 'accordion-down 0.2s ease-out',\
+&#x20; 			'accordion-up': 'accordion-up 0.2s ease-out'\
+&#x20; 		}\
+&#x20; 	}\
+&#x20; },\
+&#x20; plugins: [require("tailwindcss-animate")],\
+}\
+&#x20; import base44 from "@base44/vite-plugin"      i iisent every thing including js and json and md files    \
+import react from '@vitejs/plugin-react'\
+import { defineConfig } from 'vite'\
+\
+// https\://vite.dev/config/\
+export default defineConfig({\
+&#x20; plugins: [\
+&#x20;   base44({\
+&#x20;     // Support for legacy code that imports the base44 SDK with @/integrations, @/entities, etc.\
+&#x20;     // can be removed if the code has been updated to use the new SDK imports from @base44/sdk\
+&#x20;     legacySDKImports: process.env.BASE44_LEGACY_SDK_IMPORTS === 'true',\
+&#x20;     hmrNotifier: true,\
+&#x20;     navigationNotifier: true,\
+&#x20;     analyticsTracker: true,\
+&#x20;     visualEditAgent: true\
+&#x20;   }),\
+&#x20;   react(),\
+&#x20; ]\
+});\
+\

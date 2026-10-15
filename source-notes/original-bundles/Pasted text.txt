@@ -1,0 +1,757 @@
+mport React, { useEffect, useState, useCallback } from 'react';
+import { Radar, Loader2, ChevronDown, CheckCircle2, AlertCircle, Lightbulb } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
+
+export default function RadarPage() {
+  const [lectures, setLectures] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [concepts, setConcepts] = useState(null);
+  const [error, setError] = useState('');
+
+  const loadLectures = useCallback(async () => {
+    try {
+      const { items } = await base44.entities.Lecture.filter({}, { sort: '-created_date', limit: 100 });
+      setLectures(items);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLectures();
+  }, [loadLectures]);
+
+  const selectedLecture = lectures.find((l) => l.id === selectedId);
+
+  const handleScan = async () => {
+    if (!selectedLecture) return;
+    setScanning(true);
+    setError('');
+    setConcepts(null);
+    try {
+      const res = await base44.functions.invoke('lecture_ai', {
+        action: 'confusion_scan',
+        lectureId: selectedLecture.id,
+        content: selectedLecture.content,
+        title: selectedLecture.title,
+      });
+      const result = res.data?.result;
+      if (result?.concepts) {
+        setConcepts(result.concepts);
+      } else if (typeof result === 'string') {
+        try {
+          const parsed = JSON.parse(result);
+          setConcepts(parsed.concepts || []);
+        } catch {
+          setError('Could not parse scan results.');
+        }
+      } else {
+        setError('No concepts returned.');
+      }
+    } catch (err) {
+      setError(err.message || 'Scan failed.');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  return (
+    <div className="p-8 max-w-4xl mx-auto">
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Radar className="w-6 h-6 text-indigo-600" />
+          <h1 className="text-2xl font-bold text-slate-900">Confusion Radar</h1>
+        </div>
+        <p className="text-slate-500 text-sm">
+          AI scans a lecture transcript for concepts students typically find confusing, with explanations and practice questions.
+        </p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+        <label className="text-sm font-medium text-slate-700 mb-2 block">Select a lecture to scan</label>
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <select
+              value={selectedId}
+              onChange={(e) => { setSelectedId(e.target.value); setConcepts(null); setError(''); }}
+              className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm text-slate-900 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
+            >
+              <option value="">Choose a lecture…</option>
+              {lectures.map((l) => (
+                <option key={l.id} value={l.id}>{l.title}</option>
+              ))}
+            </select>
+            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+          <button
+            onClick={handleScan}
+            disabled={!selectedId || scanning}
+            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors whitespace-nowrap"
+          >
+            {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+            {scanning ? 'Scanning…' : 'Scan for confusion'}
+          </button>
+        </div>
+        {selectedLecture && !selectedLecture.content && (
+          <p className="text-xs text-amber-600 mt-2">This lecture has no transcript content to scan.</p>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 mb-4 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {scanning && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Analyzing transcript for confusing concepts…</p>
+        </div>
+      )}
+
+      {concepts && concepts.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            Found {concepts.length} potentially confusing concept{concepts.length !== 1 ? 's' : ''}
+          </div>
+          {concepts.map((concept, i) => (
+            <ConceptCard key={i} concept={concept} index={i} />
+          ))}
+        </div>
+      )}
+
+      {concepts && concepts.length === 0 && !error && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+          No confusing concepts detected.
+        </div>
+      )}
+
+      {!loading && lectures.length === 0 && (
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+          <p className="text-slate-500 text-sm">Add a lecture first to use the Confusion Radar.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConceptCard({ concept, index }) {
+  const [showAnswer, setShowAnswer] = useState(false);
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">
+            {index + 1}
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-slate-900 text-base">{concept.concept}</h3>
+            <p className="text-sm text-slate-500 mt-1">{concept.why_confusing}</p>
+          </div>
+        </div>
+        <div className="bg-indigo-50 rounded-xl p-4 flex gap-2.5">
+          <Lightbulb className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-slate-700 leading-relaxed">{concept.explanation}</p>
+        </div>
+        {concept.practice_question && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <p className="text-sm font-medium text-slate-900 mb-3">{concept.practice_question}</p>
+            <div className="space-y-2">
+              {concept.options?.map((opt, i) => {
+                const isCorrect = String.fromCharCode(65 + i) === concept.correct_answer;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setShowAnswer(true)}
+                    className={`w-full text-left flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-sm border transition-all ${
+                      showAnswer && isCorrect
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                        : showAnswer
+                        ? 'bg-slate-50 border-slate-200 text-slate-600'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-indigo-300'
+                    }`}
+                  >
+                    <span className="font-semibold text-xs w-5">{String.fromCharCode(65 + i)}.</span>
+                    {opt}
+                    {showAnswer && isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500 ml-auto" />}
+                  </button>
+                );
+              })}
+            </div>
+            {showAnswer && (
+              <p className="text-xs text-emerald-600 mt-2 font-medium">
+                Correct answer: {concept.correct_answer}
+              </p>
+            )}
+            {!showAnswer && (
+              <p className="text-xs text-slate-400 mt-2">Click an option to reveal the answer.</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}     this is radar page
+…
+Received File 14 — Confusion Radar Page for LectureLens.
+
+Component: RadarPage
+
+Suggested path: src/pages/RadarPage.jsx
+
+Features: Lecture selection, AI-powered confusion scanning, concept explanations, practice questions, and answer reveal.
+
+Dependencies: Base44 API and Lucide icons.
+
+Issues to check during the final review:
+
+Import typo: Your first line says mport React... — it must be import React....
+
+Answer selection: Currently, clicking any option reveals the correct answer without recording which option the student selected. I’ll review whether this should be improved.
+
+Response validation: Verify that AI-generated concepts are arrays with valid fields before rendering them.
+
+Empty transcripts: Disable scanning when the selected lecture has no content.
+
+Error handling: Keep the existing error messages and improve feedback where needed.
+
+Files received so far: 14. Keep sending the remaining files. I’ll wait for ALL FILES SENT before assembling lecturelens-production-app.zip.
+
+timport React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { base44 } from "@/api/base44Client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { UserPlus, Mail, Lock, Loader2 } from "lucide-react";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import AuthLayout from "@/components/AuthLayout";
+import GoogleIcon from "@/components/GoogleIcon";
+import { toast } from "@/components/ui/use-toast";
+import { safeReturnTo } from "@/lib/authReturnTo";
+
+export default function Register() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showOtp, setShowOtp] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    setLoading(true);
+    try {
+      await base44.auth.register({ email, password });
+      setShowOtp(true);
+    } catch (err) {
+      setError(err.message || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const result = await base44.auth.verifyOtp({ email, otpCode });
+      if (result?.access_token) {
+        base44.auth.setToken(result.access_token);
+      }
+      window.location.href = safeReturnTo();
+    } catch (err) {
+      setError(err.message || "Invalid verification code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError("");
+    try {
+      await base44.auth.resendOtp(email);
+      toast({
+        title: "Code sent",
+        description: "Check your email for the new code.",
+      });
+    } catch (err) {
+      setError(err.message || "Failed to resend code");
+    }
+  };
+
+  const handleGoogle = () => {
+    base44.auth.loginWithProvider("google", safeReturnTo());
+  };
+
+  if (showOtp) {
+    return (
+      <AuthLayout
+        icon={Mail}
+        title="Verify your email"
+        subtitle={We sent a code to ${email}}
+      >
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+            {error}
+          </div>
+        )}
+        <div className="flex justify-center mb-6">
+          <InputOTP
+            maxLength={6}
+            value={otpCode}
+            onChange={setOtpCode}
+            autoFocus
+            autoComplete="one-time-code"
+          >
+            <InputOTPGroup>
+              <InputOTPSlot index={0} />
+              <InputOTPSlot index={1} />
+              <InputOTPSlot index={2} />
+              <InputOTPSlot index={3} />
+              <InputOTPSlot index={4} />
+              <InputOTPSlot index={5} />
+            </InputOTPGroup>
+          </InputOTP>
+        </div>
+        <Button
+          className="w-full h-12 font-medium"
+          onClick={handleVerify}
+          disabled={loading || otpCode.length < 6}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Verifying...
+            </>
+          ) : (
+            "Verify"
+          )}
+        </Button>
+        <p className="text-center text-sm text-muted-foreground mt-4">
+          Didn't receive the code?{" "}
+          <button onClick={handleResend} className="text-primary font-medium hover:underline">
+            Resend
+          </button>
+        </p>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout
+      icon={UserPlus}
+      title="Create your account"
+      subtitle="Sign up to get started"
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link
+            to={"/login" + (safeReturnTo() !== "/" ? "?returnTo=" + encodeURIComponent(safeReturnTo()) : "")}
+            className="text-primary font-medium hover:underline"
+          >
+            Log in
+          </Link>
+        </>
+      }
+    >
+      <Button
+        variant="outline"
+        className="w-full h-12 text-sm font-medium mb-6"
+        onClick={handleGoogle}
+      >
+        <GoogleIcon className="w-5 h-5 mr-2" />
+        Continue with Google
+      </Button>
+
+      <div className="relative mb-6">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-card px-3 text-muted-foreground">or</span>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              autoFocus
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="pl-10 h-12"
+              required
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="pl-10 h-12"
+              required
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirm">Confirm Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="confirm"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="pl-10 h-12"
+              required
+            />
+          </div>
+        </div>
+        <Button type="submit" className="w-full h-12 font-medium" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Creating account...
+            </>
+          ) : (
+            "Create account"
+          )}
+        </Button>
+      </form>
+    </AuthLayout>
+  );
+}
+  this is register page
+…
+Received File 15 — Register Page for LectureLens.
+
+Component: Register
+
+Suggested path: src/pages/Register.jsx
+
+Features: Email/password registration, password confirmation, six-digit email OTP verification, resend verification code, Google sign-in, and safe post-registration redirects.
+
+Dependencies: Base44 authentication, React Router, shared UI components, Lucide icons, and safeReturnTo.
+
+Items to review during final assembly:
+
+Import typo: Your first line starts with timport React...; it should be import React....
+
+OTP verification: Validate the verification response and confirm the access token is stored correctly.
+
+Resend button: Prevent repeated submissions while a request is in progress.
+
+Password validation: Add appropriate password requirements if supported by the authentication backend.
+
+Redirect safety: Preserve the existing safeReturnTo() behavior and check that redirects cannot lead to untrusted external URLs.
+
+Files received so far: 15. Continue sending your remaining files. I’ll wait for ALL FILES SENT before assembling the production ZIP.
+
+mport React, { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { base44 } from "@/api/base44Client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Lock, Loader2, AlertTriangle } from "lucide-react";
+import AuthLayout from "@/components/AuthLayout";
+
+export default function ResetPassword() {
+  const [searchParams] = useSearchParams();
+  const resetToken = searchParams.get("token");
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    setLoading(true);
+    try {
+      await base44.auth.resetPassword({ resetToken, newPassword });
+      window.location.href = "/login";
+    } catch (err) {
+      setError(err.message || "Failed to reset password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!resetToken) {
+    return (
+      <AuthLayout
+        icon={AlertTriangle}
+        title="Invalid reset link"
+        subtitle="This password reset link is missing or invalid"
+        footer={
+          <Link to="/forgot-password" className="text-primary font-medium hover:underline">
+            Request a new link
+          </Link>
+        }
+      >
+        <p className="text-sm text-foreground text-center">
+          The link you used appears to be incomplete. Please request a new password reset email.
+        </p>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout
+      icon={Lock}
+      title="New password"
+      subtitle="Enter your new password below"
+    >
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          {error}
+        </div>
+      )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="password">New Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              autoFocus
+              placeholder="••••••••"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="pl-10 h-12"
+              required
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirm">Confirm Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="confirm"
+              type="password"
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="pl-10 h-12"
+              required
+            />
+          </div>
+        </div>
+        <Button type="submit" className="w-full h-12 font-medium" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Resetting...
+            </>
+          ) : (
+            "Reset password"
+          )}
+        </Button>
+      </form>
+    </AuthLayout>
+  );
+}
+  this  is reset passs
+…
+Received File 16 — Reset Password Page for LectureLens.
+
+Component: ResetPassword
+
+Suggested path: src/pages/ResetPassword.jsx
+
+Features: Reset-token validation, new password entry, password confirmation, API-based password reset, and navigation back to login.
+
+Dependencies: Base44 authentication, React Router, shared UI components, and Lucide icons.
+
+Items to check during final review:
+
+Import typo: The first line starts with mport React...; change it to import React....
+
+Missing token: The page already handles a missing reset token; I’ll preserve this behavior.
+
+Password validation: Ensure both password fields match and enforce any password requirements supported by the backend.
+
+Expired tokens: Display a useful error if the reset token has expired or is invalid.
+
+Submission handling: Prevent duplicate requests while resetting the password.
+
+Files received so far: 16. Keep sending the remaining files. I’ll wait for ALL FILES SENT before assembling lecturelens-production-app.zip.
+
+// StudyRoomsPage.jsx — Virtual study rooms with Pomodoro, whiteboard, and chat
+import React from 'react';
+import { Users, Wifi } from 'lucide-react';
+import PomodoroTimer from '@/components/PomodoroTimer';
+import Whiteboard from '@/components/Whiteboard';
+import StudyChat from '@/components/StudyChat';
+
+export default function StudyRoomsPage() {
+  return (
+    <div className="p-8 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Users className="w-5 h-5 text-indigo-600" />
+          <h1 className="text-2xl font-bold text-slate-900">Virtual Study Room</h1>
+        </div>
+        <p className="text-sm text-slate-500">Collaborate with a shared whiteboard, focus timer, and group chat.</p>
+      </div>
+
+      {/* Room layout: whiteboard on left, timer + chat on right */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-3">
+          <Whiteboard />
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Wifi className="w-3.5 h-3.5" />
+            Shared canvas — draw together in real time (demo mode)
+          </div>
+        </div>
+        <div className="space-y-6">
+          <PomodoroTimer />
+          <StudyChat />
+        </div>
+      </div>
+    </div>
+  );
+}
+…
+Received File 17 — Virtual Study Rooms Page for LectureLens.
+
+Component: StudyRoomsPage
+
+Suggested path: src/pages/StudyRoomsPage.jsx
+
+Features: Virtual study room layout, collaborative whiteboard, Pomodoro focus timer, and group chat.
+
+Dependencies: PomodoroTimer, Whiteboard, StudyChat, and Lucide icons.
+
+Items to review during final assembly:
+
+Real-time collaboration: The page labels the whiteboard as demo mode, so I’ll check whether the component actually synchronizes drawings between users.
+
+Study chat: Verify whether messages are shared between participants or only stored locally.
+
+Pomodoro timer: Check timer controls and behavior when the page is inactive.
+
+Responsive layout: Preserve the two-column desktop layout and stacked mobile layout.
+
+Files received so far: 17. Please continue sending your remaining files. I’ll wait for ALL FILES SENT before building lecturelens-production-app.zip.
+
+import React from 'react';
+import { ClipboardList } from 'lucide-react';
+import SyllabusAccordion from '@/components/SyllabusAccordion';
+import RubricGrid from '@/components/RubricGrid';
+
+/**
+ * Syllabus & Rubrics Portal page.
+ * Combines the accordion course structure with the interactive rubric grid.
+ */
+export default function SyllabusPage() {
+  return (
+    <div className="p-8 max-w-5xl mx-auto">
+      <div className="mb-8">
+        <div className="flex items-center gap-2.5 mb-1">
+          <ClipboardList className="w-6 h-6 text-indigo-600" />
+          <h1 className="text-2xl font-bold text-slate-900">Syllabus & Rubrics</h1>
+        </div>
+        <p className="text-sm text-slate-500">Course structure, module breakdown, and grading criteria.</p>
+      </div>
+
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Course Structure</h2>
+        <SyllabusAccordion />
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Grading Rubrics</h2>
+        <RubricGrid />
+      </div>
+    </div>
+  );
+}
+…
+Received File 18 — Syllabus & Rubrics Page for LectureLens.
+
+Component: SyllabusPage
+
+Suggested path: src/pages/SyllabusPage.jsx
+
+Features: Course syllabus, expandable module structure, and grading rubric display.
+
+Dependencies: SyllabusAccordion, RubricGrid, and Lucide icons.
+
+Items to review during final assembly:
+
+Confirm that syllabus modules and rubric criteria display correctly.
+
+Check whether syllabus content is static or loaded from an API.
+
+Verify that the accordion and rubric interactions work on mobile and desktop.
+
+Preserve the existing purple/indigo-and-white visual style.
+
+Files received so far: 18. Continue sending the remaining files, especially the components in src/components, API clients, src/lib, and project configuration files such as package.json.
+
+I’ll wait for ALL FILES SENT before assembling lecturelens-production-app.zip.
+
+this is indexxport function createPageUrl(pageName: string) {
+    return '/' + pageName.replace(/ /g, '-');
+}
+Received File 19 — index utility for LectureLens.
+
+Suggested path: src/lib/utils.ts (or its existing project location, depending on your folder structure).
+
+export function createPageUrl(pageName: string) {
+  return '/' + pageName.replace(/ /g, '-');
+}
+
+Purpose: Converts page names into URL paths. For example, Study Rooms becomes /Study-Rooms.
+
+Review note: I’ll check whether your routes expect lowercase URLs and ensure this helper matches the actual routing setup.
+
+Files received so far: 19. Keep sending the remaining files, including your components, API utilities, and project configuration. I’ll wait for ALL FILES SENT before creating the production ZIP.
+

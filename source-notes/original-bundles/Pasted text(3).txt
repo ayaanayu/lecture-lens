@@ -1,0 +1,329 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, Sparkles, BookOpen, MessageSquare, FileText, Loader2, Send, Layers, Volume2, Square } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
+import ReactMarkdown from 'react-markdown';
+import VoiceInput from '@/components/VoiceInput';
+import FlashcardViewer from '@/components/FlashcardViewer';
+
+const tabs = [
+  { key: 'summary', label: 'AI Summary', icon: Sparkles },
+  { key: 'notes', label: 'Study Notes', icon: BookOpen },
+  { key: 'ask', label: 'Ask a Tutor', icon: MessageSquare },
+  { key: 'flashcards', label: 'Flashcards', icon: Layers },
+  { key: 'transcript', label: 'Transcript', icon: FileText },
+];
+
+export default function LectureDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [lecture, setLecture] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('summary');
+  const [generating, setGenerating] = useState(false);
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [flashcards, setFlashcards] = useState(null);
+  const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+
+  const loadLecture = useCallback(async () => {
+    try {
+      const data = await base44.entities.Lecture.get(id);
+      setLecture(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadLecture();
+  }, [loadLecture]);
+
+  useEffect(() => {
+    if (activeTab === 'flashcards' && lecture?.flashcards && !flashcards) {
+      try {
+        const parsed = JSON.parse(lecture.flashcards);
+        setFlashcards(parsed?.flashcards || []);
+      } catch (e) {}
+    }
+  }, [activeTab, lecture, flashcards]);
+
+  const handleGenerate = async (action) => {
+    if (!lecture) return;
+    setGenerating(true);
+    try {
+      const res = await base44.functions.invoke('lecture_ai', {
+        action,
+        lectureId: lecture.id,
+        content: lecture.content,
+        title: lecture.title,
+      });
+      const result = res.data?.result;
+      const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+      if (action === 'summarize') setLecture({ ...lecture, summary: text });
+      else if (action === 'generate_notes') setLecture({ ...lecture, notes: text });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleGenerateFlashcards = async () => {
+    if (!lecture) return;
+    setGeneratingFlashcards(true);
+    try {
+      const res = await base44.functions.invoke('lecture_ai', {
+        action: 'flashcards',
+        lectureId: lecture.id,
+        content: lecture.content,
+        title: lecture.title,
+      });
+      const result = res.data?.result;
+      const cards = result?.flashcards || [];
+      setFlashcards(cards);
+      setLecture({ ...lecture, flashcards: JSON.stringify(result) });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setGeneratingFlashcards(false);
+    }
+  };
+
+  const speakText = (text) => {
+    if (!window.speechSynthesis) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const cleanText = text.replace(/[#*`_>\-\n]/g, ' ').replace(/\s+/g, ' ').trim();
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+    setSpeaking(true);
+  };
+
+  const handleAsk = async () => {
+    if (!question.trim() || !lecture) return;
+    setAsking(true);
+    try {
+      const res = await base44.functions.invoke('lecture_ai', {
+        action: 'ask_question',
+        content: lecture.content,
+        title: lecture.title,
+        question: question.trim(),
+      });
+      const result = res.data?.result;
+      const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+      setAnswer(text);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-400 text-sm">Loading lecture…</div>;
+  }
+
+  if (!lecture) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-slate-500 text-sm mb-4">Lecture not found.</p>
+        <Link to="/lectures" className="text-indigo-600 text-sm font-medium">← Back to lectures</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 max-w-4xl mx-auto">
+      <button
+        onClick={() => navigate('/lectures')}
+        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to lectures
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs font-medium text-indigo-600 bg-indigo-50 inline-block px-2.5 py-1 rounded-full mb-2">
+          {lecture.subject || 'General'}
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900">{lecture.title}</h1>
+      </div>
+
+      <div className="flex gap-1 border-b border-slate-200 mb-6 overflow-x-auto">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === tab.key
+                ? 'border-indigo-600 text-indigo-700'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'summary' && (
+        <TabContent
+          content={lecture.summary}
+          generating={generating}
+          onGenerate={() => handleGenerate('summarize')}
+          generateLabel="Generate AI Summary"
+          icon={Sparkles}
+          emptyText="No summary yet. Generate one with AI to get a structured overview of this lecture."
+        />
+      )}
+
+      {activeTab === 'notes' && (
+        <TabContent
+          content={lecture.notes}
+          generating={generating}
+          onGenerate={() => handleGenerate('generate_notes')}
+          generateLabel="Generate Study Notes"
+          icon={BookOpen}
+          emptyText="No study notes yet. Generate comprehensive notes with definitions, concepts, and review questions."
+        />
+      )}
+
+      {activeTab === 'ask' && (
+        <div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Ask a question about this lecture… or use voice input below"
+              className="w-full resize-y min-h-[80px] text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none border-0"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAsk();
+              }}
+            />
+            <div className="flex items-center justify-between mt-3 gap-3 flex-wrap">
+              <VoiceInput onTranscript={(text) => setQuestion(text)} />
+              <button
+                onClick={handleAsk}
+                disabled={asking || !question.trim()}
+                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                {asking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {asking ? 'Thinking…' : 'Ask'}
+              </button>
+            </div>
+          </div>
+          {answer && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-6">
+              <div className="flex items-center justify-end mb-3">
+                <button
+                  onClick={() => speakText(answer)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  {speaking ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                  {speaking ? 'Stop reading' : 'Read aloud'}
+                </button>
+              </div>
+              <div className="prose prose-sm prose-slate max-w-none">
+                <ReactMarkdown>{answer}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+          {!answer && !asking && (
+            <p className="text-center text-slate-400 text-sm py-8">
+              Your AI tutor will answer questions based on this lecture's transcript.
+            </p>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'flashcards' && (
+        <FlashcardViewer
+          flashcards={flashcards || []}
+          generating={generatingFlashcards}
+          onGenerate={handleGenerateFlashcards}
+        />
+      )}
+
+      {activeTab === 'transcript' && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          {lecture.content ? (
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{lecture.content}</p>
+          ) : (
+            <p className="text-center text-slate-400 text-sm py-8">No transcript available for this lecture.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TabContent({ content, generating, onGenerate, generateLabel, icon: Icon, emptyText }) {
+  const [speaking, setSpeaking] = useState(false);
+
+  const speak = () => {
+    if (!window.speechSynthesis) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const cleanText = content.replace(/[#*`_>\-\n]/g, ' ').replace(/\s+/g, ' ').trim();
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+    setSpeaking(true);
+  };
+
+  if (generating) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
+        <p className="text-sm text-slate-500">Generating with AI…</p>
+      </div>
+    );
+  }
+  if (content) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <div className="flex items-center justify-end mb-3">
+          <button
+            onClick={speak}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {speaking ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+            {speaking ? 'Stop reading' : 'Read aloud'}
+          </button>
+        </div>
+        <div className="prose prose-sm prose-slate max-w-none">
+          <ReactMarkdown>{content}</ReactMarkdown>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+      <Icon className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+      <p className="text-slate-500 text-sm mb-4">{emptyText}</p>
+      <button
+        onClick={onGenerate}
+        className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+      >
+        <Icon className="w-4 h-4" />
+        {generateLabel}
+      </button>
+    </div>
+  );
+}
