@@ -1,6 +1,6 @@
 # LectureLens — AI Study Companion
 
-A clean React + Vite frontend reconstructed from the LectureLens source bundles you supplied. It includes the main study workflows and local-first fallback behavior so the UI remains usable without a configured backend.
+A clean React + Vite frontend reconstructed from the LectureLens source bundles you supplied. It includes the main study workflows and local-first fallback behavior so the UI remains usable without a configured backend..
 
 ## Run locally
 
