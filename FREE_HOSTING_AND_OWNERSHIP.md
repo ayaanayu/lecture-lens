@@ -14,7 +14,7 @@ Free tiers have quotas and terms that can change. A free subdomain is generally 
 
 ## Deploy steps
 
-1. Create a GitHub account if you do not already have one, then create a repository named `lecturelens` under your account.
+1. Create a GitHub account if you do not already have one, then create a repository named `lecturelens` under the account.
 2. Upload/push the contents of this project folder to that repository. Do not upload `.env` or secrets.
 3. Create a Cloudflare account and open **Workers & Pages → Create → Pages → Connect to Git** (labels may vary).
 4. Select your repository. Set build command to `npm run build` and build output directory to `dist`; deploy.
